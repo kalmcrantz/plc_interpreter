@@ -19,7 +19,7 @@
 ;this is the method that should be called to interpret a file
 (define evaluate
   (lambda (file)
-    (Mvalue 'return (Mstate_stmt_list (parser file) '(()())))))
+    (Mstate_stmt_list (parser file) '(()()))))
 
 ;returns the state of a list of statements
 (define Mstate_stmt_list
