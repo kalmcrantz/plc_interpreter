@@ -12,8 +12,6 @@
 ;if statement	(if conditional then-statement optional-else-statement)
 ;while statement	(while conditional body-statement)
 
-#lang racket
-
 (require "simpleParser.scm")
 
 ;this is the method that should be called to interpret a file
@@ -33,19 +31,8 @@
 (define Mstate_stmt
   (lambda (stmt s)
     (cond
-      ((eq? 'return (operator stmt)) (Mstate_return stmt s))
-      ((or (eq? '+ (operator stmt))
-           (eq? '- (operator stmt))
-           (eq? '/ (operator stmt))
-           (eq? '* (operator stmt))
-           (eq? '% (operator stmt))
-           (eq? '> (operator stmt))
-           (eq? '>= (operator stmt))
-           (eq? '< (operator stmt))
-           (eq? '<= (operator stmt))
-           (eq? '== (operator stmt))
-           (eq? '!= (operator stmt))) (Mvalue stmt s))          
-      ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (cadddr stmt) s)))))
+      ((eq? 'return (car stmt)) (Mstate_return stmt s))
+      ((eq? 'if (car stmt)) (Mstate_if (cadr stmt) (caddr stmt) (cadddr stmt) s)))))
 
 ;returns the state of an if-then statement
 (define Mstate_if
@@ -57,13 +44,7 @@
 ;returns the value of the condition with the state s
 (define Mboolean
   (lambda (condition s)
-    (cond
-      ((number? condition) condition)
-      ((boolean? condition) condition)
-      ((not (pair? condition)) condition)
-      ((eq? 'true condition) #t)
-      ((eq? 'false condition) #f)
-      ((eq? '> (operator condition))(> (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s))))))
+    condition))
 
 ;returns the value of 'value' with the current state 's'
 (define Mvalue
@@ -71,18 +52,13 @@
     (cond
       ((null? s) 'Error)
       ((number? value) value)
-      ((not(pair? value)) value)
-      ((eq? '+ (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '- (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '* (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '/ (operator value))(quotient((Mvalue (first_operand value) s) (Mvalue (second_operand value)s))))  
       ((eq? value (car (name_list s))) (car (value_list s)))
       (else (Mvalue value (cons (cdr (name_list s)) (cons (cdr (value_list s)) '())))))))
 
 ;returns the state that exists after a return statement is executed
 (define Mstate_return
   (lambda (stmt s)
-    (Mvalue (first_operand stmt) s )))
+    (add_binding 'return (Mvalue (first_operand stmt) s) s)))
 
 ;adds a binding to the state
 ;paramters: 'name' of binding and 'value' of binding
@@ -101,12 +77,25 @@
     (car (cdr s))))
 
 ;returns the first element of a list (operator)
-(define operator car)
+(define operator
+  (lambda (lis)
+    (if (null? lis)
+        lis
+        (car lis))))
 
 ;returns the second element of a list (first operator)
-(define first_operand cadr)
-
+(define first_operand
+  (lambda (lis)
+    (cond
+      ((null? lis) lis)
+      ((null? (cdr lis)) '())
+      (else (cadr lis)))))
 
 ;returns the third element of a list (second operator)
-(define second_operand caddr)
-
+(define second_operand
+  (lambda (lis)
+    (cond
+      ((null? lis?) lis)
+      ((null? (cdr lis)) '())
+      ((null? (cddr lis)) '())
+      (else (caddr lis)))))
