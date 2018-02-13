@@ -1,2 +1,5 @@
 
 *.bak
+desktop.ini
+compiled/drracket/errortrace/lex_scm.dep
+compiled/drracket/errortrace/lex_scm.zo
