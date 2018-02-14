@@ -63,6 +63,10 @@
       ((not (pair? condition)) condition)
       ((eq? 'true condition) #t)
       ((eq? 'false condition) #f)
+      ((eq? '< (operator condition))(< (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
+      ((eq? '< (operator condition))(< (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
+      ((eq? '<= (operator condition))(<= (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
+      ((eq? '>= (operator condition))(>= (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
       ((eq? '> (operator condition))(> (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s))))))
 
 ;returns the value of 'value' with the current state 's'
@@ -75,10 +79,29 @@
       ((eq? '+ (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
       ((eq? '- (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
       ((eq? '* (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '/ (operator value))(quotient((Mvalue (first_operand value) s) (Mvalue (second_operand value)s))))  
+      ((eq? '/ (operator value))(quotient((Mvalue (first_operand value) s) (Mvalue (second_operand value)s))))
+      ((eq? '/ (operator value))(remainder((Mvalue (first_operand value) s) (Mvalue (second_operand value)s))))
       ((eq? value (car (name_list s))) (car (value_list s)))
       (else (Mvalue value (cons (cdr (name_list s)) (cons (cdr (value_list s)) '())))))))
 
+;checks to see if value is a variable or not
+(define variable?
+  (lambda (value s)
+    (cond
+      ((eq? '+ x) #f)
+      ((eq? '- x) #f)
+      ((eq? '* x) #f)
+      ((eq? '/ x) #f)
+      ((eq? '% x) #f)
+      ((eq? '|| x) #f)
+      ((eq? '&& x) #f)
+      ((eq? '= x) #f)
+      ((eq? '< x) #f)
+      ((eq? '> x) #f)
+      ((eq? '>= x) #f)
+      ((eq? '<= x) #f)
+      ((eq? '!= x) #f)
+      ((eq? 'return) #f
 ;returns the state that exists after a return statement is executed
 (define Mstate_return
   (lambda (stmt s)
@@ -105,7 +128,6 @@
 
 ;returns the second element of a list (first operator)
 (define first_operand cadr)
-
 
 ;returns the third element of a list (second operator)
 (define second_operand caddr)
