@@ -47,12 +47,8 @@
            (eq? '!= (operator stmt))) (Mvalue stmt s))          
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (cadddr stmt) s))
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
-      ((and (eq? 'var (operator stmt)) (null? (second_operand stmt))) (Mstate_declare (first_operand stmt) s))
+      ((and (eq? 'var (operator stmt)) (null? (cddr stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
-
-(define Mstate_declare_and_assign
-  (lambda (variable value s)
-    (Mstate_assign variable value (Mstate_declare variable))))
 
 ;returns the state of an if-then statement
 (define Mstate_if
@@ -71,12 +67,15 @@
   (lambda (variable value s)
     (update_binding variable (Mvalue value s) s)))
 
-(define update_binding
+;returns the state of a variable declaration and assignment
+(define Mstate_declare_and_assign
   (lambda (variable value s)
-    (cond
-      ((or (null? value) (null? s)) 'Error)
-      ((eq? (car (name_list s)) variable) (cons (name_list s) (cons (cons value (cdr (value_list s))) '())))
-      (else (add_binding (car (name_list s)) (car (value_list s)) (update_binding variable value (cons (cdr (name_list s)) (cons (cdr (value_list s)) '()))))))))
+    (Mstate_assign variable value (Mstate_declare variable s))))
+
+;returns the state that exists after a return statement is executed
+(define Mstate_return
+  (lambda (stmt s)
+    (Mvalue (first_operand stmt) s )))
 
 ;returns the value of the condition with the state s
 (define Mboolean
@@ -106,6 +105,7 @@
       ((eq? '/ (operator value))(quotient((Mvalue (first_operand value) s) (Mvalue (second_operand value)s))))
       ((eq? '/ (operator value))(remainder((Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))))))
 
+;returns the value of the variable with the current state 's'
 (define Mvalue_var
   (lambda (value s)
     (cond
@@ -133,16 +133,20 @@
       ((number? x) #f)
       ((eq? 'return) #f)
       (else #t))))
-;returns the state that exists after a return statement is executed
-(define Mstate_return
-  (lambda (stmt s)
-    (Mvalue (first_operand stmt) s )))
 
 ;adds a binding to the state
 ;paramters: 'name' of binding and 'value' of binding
 (define add_binding
   (lambda (name value s)
     (cons (cons name (name_list s)) (cons (cons value (value_list s)) '()))))
+
+;updates the variable with the value
+(define update_binding
+  (lambda (variable value s)
+    (cond
+      ((or (null? value) (null? s)) 'Error)
+      ((eq? (car (name_list s)) variable) (cons (name_list s) (cons (cons value (cdr (value_list s))) '())))
+      (else (add_binding (car (name_list s)) (car (value_list s)) (update_binding variable value (cons (cdr (name_list s)) (cons (cdr (value_list s)) '()))))))))
 
 ;returns the list of names of bindings in a state s
 (define name_list
