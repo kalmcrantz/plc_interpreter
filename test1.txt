@@ -1,4 +1,7 @@
-if (1 > 200)
-	return 400;
+var x;
+var y = 100;
+x = 2;
+if (x > y)
+	return 100;
 else
 	return 200;
