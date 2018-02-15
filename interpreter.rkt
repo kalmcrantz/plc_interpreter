@@ -38,14 +38,15 @@
            (eq? '- (operator stmt))
            (eq? '/ (operator stmt))
            (eq? '* (operator stmt))
-           (eq? '% (operator stmt))
-           (eq? '> (operator stmt))
+           (eq? '% (operator stmt))) (Mvalue stmt s))
+      ((or (eq? '> (operator stmt))
            (eq? '>= (operator stmt))
            (eq? '< (operator stmt))
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
-           (eq? '!= (operator stmt))) (Mvalue stmt s))          
+           (eq? '!= (operator stmt))) (Mboolean stmt s))
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (cadddr stmt) s))
+      ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s))
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
       ((and (eq? 'var (operator stmt)) (null? (cddr stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
@@ -56,6 +57,14 @@
     (if (Mboolean condition s)
         (Mstate_stmt then s)
         (Mstate_stmt else s))))
+
+;returns the state of a while loop
+(define Mstate_while
+  (lambda (condition body s)
+    (if (Mboolean condition s)
+        (Mstate_while condition body (Mstate_stmt body s))
+        s)))
+        ;(Mstate_stmt body s))))
 
 ;returns the state after a declaration
 (define Mstate_declare
@@ -84,8 +93,12 @@
       ((number? condition) condition)
       ((boolean? condition) condition)
       ((not (pair? condition)) condition)
-      ((eq? 'true condition) #t)
-      ((eq? 'false condition) #f)
+      ((eq? #t condition) 'true)
+      ((eq? #f condition) 'false)
+      ((eq? '&& (operator condition)) (and (Mboolean (first_operand condition) s) (Mboolean (second_operand condition) s)))
+      ((eq? '|| (operator condition)) (or (Mboolean (first_operand condition) s) (Mboolean (second_operand condition) s)))
+      ((eq? '== (operator condition))(eq? (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
+      ((eq? '!= (operator condition))(not (eq? (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s))))
       ((eq? '< (operator condition))(< (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
       ((eq? '< (operator condition))(< (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
       ((eq? '<= (operator condition))(<= (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
@@ -98,12 +111,14 @@
     (cond
       ((null? s) 'Error)
       ((number? value) value)
+      ((eq? #t value) 'true)
+      ((eq? #f value) 'false)
       ((not(pair? value)) (Mvalue_var value s))
       ((eq? '+ (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '- (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '* (operator value))(+ (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '/ (operator value))(quotient((Mvalue (first_operand value) s) (Mvalue (second_operand value)s))))
-      ((eq? '/ (operator value))(remainder((Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))))))
+      ((eq? '- (operator value))(- (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
+      ((eq? '* (operator value))(* (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
+      ((eq? '/ (operator value))(quotient(Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
+      ((eq? '% (operator value))(remainder(Mvalue (first_operand value) s) (Mvalue (second_operand value)s))))))
 
 ;returns the value of the variable with the current state 's'
 (define Mvalue_var
@@ -116,23 +131,9 @@
 ;checks to see if value is a variable or not
 (define variable?
   (lambda (x s)
-    (cond
-      ((eq? '+ x) #f)
-      ((eq? '- x) #f)
-      ((eq? '* x) #f)
-      ((eq? '/ x) #f)
-      ((eq? '% x) #f)
-      ((eq? '|| x) #f)
-      ((eq? '&& x) #f)
-      ((eq? '= x) #f)
-      ((eq? '< x) #f)
-      ((eq? '> x) #f)
-      ((eq? '>= x) #f)
-      ((eq? '<= x) #f)
-      ((eq? '!= x) #f)
-      ((number? x) #f)
-      ((eq? 'return) #f)
-      (else #t))))
+    (if (pair? (car x))
+        #t
+        #f)))
 
 ;adds a binding to the state
 ;paramters: 'name' of binding and 'value' of binding
@@ -166,4 +167,5 @@
 
 ;returns the third element of a list (second operator)
 (define second_operand caddr)
+
 
