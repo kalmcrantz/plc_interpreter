@@ -49,7 +49,7 @@
            (eq? '< (operator stmt))
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
-           (eq? '!= (operator stmt))) (Mboolean stmt s))
+           (eq? '!= (operator stmt))) (Mvalue stmt s))
       ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s))
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s))
       ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s))
@@ -60,7 +60,7 @@
 ;returns the state of an if-then statement
 (define Mstate_if
   (lambda (condition then else s)
-    (if (Mboolean condition s)
+    (if (Mvalue condition s)
         (Mstate_stmt then s)
         (Mstate_stmt else s))))
 
@@ -70,7 +70,7 @@
 ;returns the state of a while loop
 (define Mstate_while
   (lambda (condition body s)
-    (if (Mboolean condition s)
+    (if (Mvalue condition s)
         (Mstate_while condition body (Mstate_stmt body s))
         s)))
         ;(Mstate_stmt body s))))
@@ -97,7 +97,7 @@
   (lambda (stmt s)
     (cond
       ((eq? #t (Mvalue (first_operand stmt) s)) 'true)
-      ((eq? #f (Mvalue (first_operand stmt) s)) false)
+      ((eq? #f (Mvalue (first_operand stmt) s)) 'false)
       (else (Mvalue (first_operand stmt) s)))))
 
 ;returns the value of the condition with the state s
@@ -116,7 +116,9 @@
       ((eq? '< (operator condition))(< (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
       ((eq? '<= (operator condition))(<= (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
       ((eq? '>= (operator condition))(>= (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
-      ((eq? '> (operator condition))(> (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s))))))
+      ((eq? '> (operator condition))(> (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
+      ((eq? '! (operator condition)) (not (Mvalue (first_operand condition) s)))
+      (else (raise 'not-valid-operator)))))
 
 
 ;returns the value of 'value' with the current state 's'
@@ -128,6 +130,7 @@
       ((boolean? value) value)
       ((eq? 'true value) #t)
       ((eq? 'false value) #f)
+      ((or (eq? #t value) (eq? #f value)) value)
       ((not(pair? value)) (Mvalue_var value s))
       ((eq? '+ (operator value)) (+ (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
       ((and (eq? '- (operator value)) (null? (cddr value)))(- 0 (Mvalue (first_operand value) s)))
@@ -135,14 +138,18 @@
       ((eq? '* (operator value))(* (Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
       ((eq? '/ (operator value))(quotient(Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
       ((eq? '% (operator value))(remainder(Mvalue (first_operand value) s) (Mvalue (second_operand value)s)))
-      ((eq? '&& (operator value)) (and (Mboolean (first_operand value) s) (Mboolean (second_operand value) s)))
-      ((eq? '|| (operator value)) (or (Mboolean (first_operand value) s) (Mboolean (second_operand value) s)))
-      ((or (eq? '> (operator value))
-           (eq? '>= (operator value))
-           (eq? '< (operator value))
-           (eq? '<= (operator value))
-           (eq? '== (operator value))
-           (eq? '!= (operator value))) (Mboolean value s)))))
+      ((eq? '&& (operator value)) (and (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '|| (operator value)) (or (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '&& (operator value)) (and (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '|| (operator value)) (or (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '== (operator value))(eq? (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '!= (operator value))(not (eq? (Mvalue (first_operand value) s) (Mvalue (second_operand value) s))))
+      ((eq? '< (operator value))(< (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '<= (operator value))(<= (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '>= (operator value))(>= (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '> (operator value))(> (Mvalue (first_operand value) s) (Mvalue (second_operand value) s)))
+      ((eq? '! (operator value)) (not (Mvalue (first_operand value) s)))
+      (else (raise 'not-valid-operator)))))
 
 ;returns the value of the variable with the current state 's'
 (define Mvalue_var
