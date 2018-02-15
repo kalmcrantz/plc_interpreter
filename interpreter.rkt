@@ -58,6 +58,9 @@
         (Mstate_stmt then s)
         (Mstate_stmt else s))))
 
+;returns the state of an if statement
+;/////TO DO
+
 ;returns the state of a while loop
 (define Mstate_while
   (lambda (condition body s)
@@ -69,6 +72,8 @@
 ;returns the state after a declaration
 (define Mstate_declare
   (lambda (variable s)
+    (cond
+      ((M_
     (add_binding variable null s)))
 
 ;returns the state after an assignment
@@ -91,7 +96,7 @@
   (lambda (condition s)
     (cond
       ((number? condition) condition)
-      ((boolean? condition) '222)
+      ((boolean? condition) condition)
       ((not(pair? condition)) (Mvalue_var condition s))
       ((eq? 'true condition) #t)
       ((eq? 'false condition) #f)
@@ -109,8 +114,8 @@
 (define Mvalue
   (lambda (value s)
     (cond
-      ;((null? s) 'Error)
-      ;((number? value) value)
+      ((null? s) 'Error)
+      ((number? value) value)
       ((boolean? value) value)
       ((eq? 'true value) #t)
       ((eq? 'false value) #f)
