@@ -95,7 +95,10 @@
 ;returns the state that exists after a return statement is executed
 (define Mstate_return
   (lambda (stmt s)
-    (Mvalue (first_operand stmt) s )))
+    (cond
+      ((eq? #t (Mvalue (first_operand stmt) s)) 'true)
+      ((eq? #f (Mvalue (first_operand stmt) s)) false)
+      (else (Mvalue (first_operand stmt) s)))))
 
 ;returns the value of the condition with the state s
 (define Mboolean
