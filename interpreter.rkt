@@ -43,8 +43,8 @@
            (eq? '- (operator stmt))
            (eq? '/ (operator stmt))
            (eq? '* (operator stmt))
-           (eq? '% (operator stmt))) (Mvalue stmt s))
-      ((or (eq? '> (operator stmt))
+           (eq? '% (operator stmt))
+           (eq? '> (operator stmt))
            (eq? '>= (operator stmt))
            (eq? '< (operator stmt))
            (eq? '<= (operator stmt))
@@ -99,27 +99,6 @@
       ((eq? #t (Mvalue (first_operand stmt) s)) 'true)
       ((eq? #f (Mvalue (first_operand stmt) s)) 'false)
       (else (Mvalue (first_operand stmt) s)))))
-
-;returns the value of the condition with the state s
-(define Mboolean
-  (lambda (condition s)
-    (cond
-      ((number? condition) condition)
-      ((boolean? condition) condition)
-      ((not(pair? condition)) (Mvalue_var condition s))
-      ((eq? 'true condition) #t)
-      ((eq? 'false condition) #f)
-      ((eq? '&& (operator condition)) (and (Mboolean (first_operand condition) s) (Mboolean (second_operand condition) s)))
-      ((eq? '|| (operator condition)) (or (Mboolean (first_operand condition) s) (Mboolean (second_operand condition) s)))
-      ((eq? '== (operator condition))(eq? (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
-      ((eq? '!= (operator condition))(not (eq? (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s))))
-      ((eq? '< (operator condition))(< (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
-      ((eq? '<= (operator condition))(<= (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
-      ((eq? '>= (operator condition))(>= (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
-      ((eq? '> (operator condition))(> (Mvalue (first_operand condition) s) (Mvalue (second_operand condition) s)))
-      ((eq? '! (operator condition)) (not (Mvalue (first_operand condition) s)))
-      (else (raise 'not-valid-operator)))))
-
 
 ;returns the value of 'value' with the current state 's'
 (define Mvalue
