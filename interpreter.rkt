@@ -23,7 +23,7 @@
 ;this is the method that should be called to interpret a file
 (define evaluate
   (lambda (file)
-    (Mstate_stmt_list (parser file) '(()()))))
+    (Mstate_stmt_list (parser file) initial_state)))
 
 ;returns the state of a list of statements
 (define Mstate_stmt_list
@@ -193,4 +193,5 @@
 ;returns the fourth element of a list (third operator)
 (define third_operand cadddr)
 
-
+;returns the inital state at the very beginning of a program
+(define initial_state '(()()))
