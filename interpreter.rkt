@@ -1,20 +1,4 @@
-;The following mathematical operations are implemented : +, -, *, /, % (including the unary -),
-;the following comparison operators are implemented: ==, !=, <, >, <=. >=,
-;and the following boolean operators: &&, ||, !.
-;Variables may store values of type int as well as true and false.
-;You do not have to detect an error if a program uses a type incorrectly (but it is not hard to add the error check).
-;You do not have to implement short-circuit evaluation of && or ||, but you are welcome to do so.
-
-;Formally, a parse tree is a list where each sublist corresponds to a statement. The different statements are:
-;variable declaration	(var variable) or (var variable value)
-;assignment	(= variable expression)
-;return	(return expression)
-;if statement	(if conditional then-statement optional-else-statement)
-;while statement	(while conditional body-statement)
-
-
-;Problem:
-;returns #t instead of "true"
+;Kimberly Almcrantz (kaa97) Jenny Zhao (sxz402)
 
 #lang racket
 
@@ -25,7 +9,7 @@
   (lambda (file)
     (Mstate_stmt_list (parser file) initial_state)))
 
-;returns the state of a list of statements
+;returns the state after a list of statements
 (define Mstate_stmt_list
   (lambda (slist s)
     (if (null? slist)
@@ -33,7 +17,6 @@
         (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s)))))
 
 ;returns the state that exists after the stmt is executed
-;currently only accomodates 'return' statement
 (define Mstate_stmt
   (lambda (stmt s)
     (cond
@@ -64,16 +47,12 @@
         (Mstate_stmt then s)
         (Mstate_stmt else s))))
 
-;returns the state of an if statement
-;/////TO DO
-
 ;returns the state of a while loop
 (define Mstate_while
   (lambda (condition body s)
     (if (Mvalue condition s)
         (Mstate_while condition body (Mstate_stmt body s))
         s)))
-        ;(Mstate_stmt body s))))
 
 ;returns the state after a declaration
 (define Mstate_declare
@@ -140,13 +119,6 @@
       ((and (eq? value (car (name_list s))) (null? (car (value_list s)))) (raise 'Variable-not-assigned-a-value))
       ((eq? value (car (name_list s)))(car (value_list s)))
       (else (Mvalue_var value (cons (cdr (name_list s)) (cons (cdr (value_list s)) '())))))))
-
-;checks to see if value is a variable or not
-(define variable?
-  (lambda (x s)
-    (if (pair? (car x))
-        #t
-        #f)))
 
 ;adds a binding to the state
 ;paramters: 'name' of binding and 'value' of binding
