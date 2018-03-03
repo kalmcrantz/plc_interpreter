@@ -124,17 +124,63 @@
 ;paramters: 'name' of binding and 'value' of binding
 (define add_binding
   (lambda (name value s)
-    (cons (cons name (name_list s)) (cons (cons value (value_list s)) '()))))
+    (add_specific_layer (add_binding_in_layer name value (list (top_name_list s) (top_value_list s))) (remove_layer s))))
 
 ;updates the variable with the value
 (define update_binding
   (lambda (variable value s)
     (cond
-      ((or (null? value) (null? s)) 'Error)
-      ((not (variable_declared? variable (name_list s))) (raise 'Variable-not-declared))
-      ((eq? (car (name_list s)) variable) (cons (name_list s) (cons (cons value (cdr (value_list s))) '())))
-      (else (add_binding (car (name_list s)) (car (value_list s)) (update_binding variable value (cons (cdr (name_list s)) (cons (cdr (value_list s)) '()))))))))
+      ((or (null? value) (null? s)) (raise 'No-given-variable))
+      ((variable_in_top_layer? variable s) (add_specific_layer (update_binding_in_layer variable value (list (top_name_list s) (top_value_list s))) (remove_layer s)))
+      (else (add_specific_layer (list (top_name_list s) (top_value_list s)) (remove_layer s))))))
+       
+(define update_binding_in_layer
+  (lambda (variable value layer)
+    (cond
+      ((null? layer) (raise 'Variable-not-declared))
+      ((eq? (car (name_list layer)) variable) (list (name_list layer) (cons value (cdr (value_list layer)))))
+      (else (add_binding_in_layer (car (name_list layer)) (car (value_list layer)) (update_binding_in_layer variable value (list (cdr (name_list layer)) (cdr (value_list layer)))))))))
 
+(define add_binding_in_layer
+  (lambda (variable value layer)
+    (if (null? layer)
+        (list (list variable) (list value))
+        (list (cons variable (name_list layer)) (cons value (value_list layer))))))
+
+(define variable_in_top_layer?
+  (lambda (variable s)
+    (cond
+      ((or (null? s) (null? (top_name_list s))) #f)
+      (else (variable_declared? variable (top_name_list s))))))
+
+;adds a layer to the state
+(define add_empty_layer
+  (lambda (s)
+    (cons (cons '() (name_list s)) (cons (cons '() (value_list s)) '()))))
+
+(define add_specific_layer
+  (lambda (layer s)
+    (if (null? s)
+        (list (cons (name_list layer) '()) (cons (value_list layer) '()))
+        (list (cons (name_list layer) (name_list s)) (cons (value_list layer) (value_list s))))))
+
+;removes the top layer of the state
+(define remove_layer
+  (lambda (s)
+    (if (null? s)
+        s
+        (list (cdr (car s)) (cdr (car (cdr s)))))))
+
+;gets the name list of the top layer
+(define top_name_list
+  (lambda (s)
+    (car (car s))))
+
+;gets the value list of the top layer
+(define top_value_list
+  (lambda (s)
+    (car (car (cdr s)))))
+     
 ;returns whether or not the variable is declared in the state s
 (define variable_declared?
   (lambda (variable lis)
