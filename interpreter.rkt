@@ -7,21 +7,25 @@
 ;this is the method that should be called to interpret a file
 (define evaluate
   (lambda (file)
-    (Mstate_stmt_list (parser file) initial_state)))
+    (call/cc
+     (lambda (return)
+       (call/cc
+        (lambda (continue)
+       (Mstate_stmt_list (parser file) initial_state return continue)))))))
 
 ;returns the state after a list of statements
 (define Mstate_stmt_list
-  (lambda (slist s)
-    (if (null? slist)
+  (lambda (slist s return continue)
+       (if (null? slist)
         s
-        (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s)))))
+        (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s return continue) return continue))))
 
 ;returns the state that exists after the stmt is executed
 (define Mstate_stmt
-  (lambda (stmt s)
+  (lambda (stmt s return continue)
     (cond
       ((null? stmt) s)
-      ((eq? 'return (operator stmt)) (Mstate_return stmt s))
+      ((eq? 'return (operator stmt)) (return (Mstate_return stmt s return)))
       ((or (eq? '+ (operator stmt))
            (eq? '- (operator stmt))
            (eq? '/ (operator stmt))
@@ -33,25 +37,34 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s))
-      ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s))
-      ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s))
+      ((eq? 'begin (operator stmt)) (Mstate_begin (cdr stmt) s return continue))
+      ((eq? 'continue (operator stmt)) (continue (cadr s)))
+      ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue))
+      ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue))
+      ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s return continue))
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
       ((and (eq? 'var (operator stmt)) (null? (cddr stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
 
+;returns the state after a block of code enclosed in curly brackets
+(define Mstate_begin
+  (lambda (body s return continue)
+    (cond
+      ((null? body) s)
+      (else (Mstate_begin (cdr body) (Mstate_stmt (car body) s return continue) return continue)))))
+
 ;returns the state of an if-then statement
 (define Mstate_if
-  (lambda (condition then else s)
+  (lambda (condition then else s return continue)
     (if (Mvalue condition s)
-        (Mstate_stmt then s)
-        (Mstate_stmt else s))))
+        (Mstate_stmt then s return continue)
+        (Mstate_stmt else s return continue))))
 
 ;returns the state of a while loop
 (define Mstate_while
-  (lambda (condition body s)
+  (lambda (condition body s return continue)
     (if (Mvalue condition s)
-        (Mstate_while condition body (Mstate_stmt body s))
+        (Mstate_while condition body (Mstate_stmt body s return continue) return continue)
         s)))
 
 ;returns the state after a declaration
@@ -73,7 +86,7 @@
 
 ;returns the state that exists after a return statement is executed
 (define Mstate_return
-  (lambda (stmt s)
+  (lambda (stmt s return)
     (cond
       ((eq? #t (Mvalue (first_operand stmt) s)) 'true)
       ((eq? #f (Mvalue (first_operand stmt) s)) 'false)
