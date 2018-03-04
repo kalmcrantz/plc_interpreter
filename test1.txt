@@ -1,7 +1,8 @@
-var x = 0;
-while (x < 6) {
-  x = x + 1;
-  continue;
-  x = x + 100;
+var x = 10;
+if (x < 6) {
+	x = 3;
+}
+else {
+	x = 20;
 }
 return x;

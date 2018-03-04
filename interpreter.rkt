@@ -38,7 +38,7 @@
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
       ((eq? 'begin (operator stmt)) (Mstate_begin (cdr stmt) s return continue))
-      ((eq? 'continue (operator stmt)) (continue (caaadr s)))
+      ((eq? 'continue (operator stmt)) (continue s))
       ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue))
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue))
       ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s return)) 
@@ -63,11 +63,9 @@
 ;returns the state of a while loop
 (define Mstate_while 
   (lambda (condition body s return)
-    (call/cc
-     (lambda (continue)
          (if (Mvalue condition s)
-             (Mstate_while condition body (Mstate_stmt body s return continue) return)
-          s)))))
+             (Mstate_while condition body (call/cc (lambda (continue) (Mstate_stmt body s return continue))) return)
+          s)))
 
 ;returns the state after a declaration
 (define Mstate_declare
