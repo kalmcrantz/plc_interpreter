@@ -116,9 +116,16 @@
       ((eq? value 'true) #t)
       ((eq? value 'false) #f)
       ((or (null? value) (null? (name_list s)) (null? (value_list s))) (raise 'Variable-not-declared))
-      ((and (eq? value (car (name_list s))) (null? (car (value_list s)))) (raise 'Variable-not-assigned-a-value))
-      ((eq? value (car (name_list s)))(car (value_list s)))
-      (else (Mvalue_var value (cons (cdr (name_list s)) (cons (cdr (value_list s)) '())))))))
+      ((variable_in_top_layer? value s) (lookup_in_layer value (get_top_layer s)))
+      (else (Mvalue_var value (remove_layer s))))))
+
+(define lookup_in_layer
+  (lambda (value layer)
+    (cond
+      ((null? layer) (raise 'Variable-doesn't-exist))
+      ((and (eq? value (car (name_list layer))) (null? (car (value_list layer)))) (raise 'Variable-not-assigned-a-value))
+      ((eq? value (car (name_list layer)))(car (value_list layer)))
+      (else (lookup_in_layer value (cons (cdr (name_list layer)) (cons (cdr (value_list layer)) '())))))))
 
 ;adds a binding to the state
 ;paramters: 'name' of binding and 'value' of binding
@@ -163,6 +170,12 @@
     (if (null? s)
         (list (cons (name_list layer) '()) (cons (value_list layer) '()))
         (list (cons (name_list layer) (name_list s)) (cons (value_list layer) (value_list s))))))
+
+(define get_top_layer
+  (lambda (s)
+    (if (null? s)
+        s
+        (list (top_name_list s) (top_value_list s)))))
 
 ;removes the top layer of the state
 (define remove_layer
@@ -212,4 +225,4 @@
 (define third_operand cadddr)
 
 ;returns the inital state at the very beginning of a program
-(define initial_state '(()()))
+(define initial_state '((())(())))
