@@ -11,7 +11,7 @@
      (lambda (return)
        (call/cc
         (lambda (continue)
-       (Mstate_stmt_list (parser file) initial_state return continue)))))))
+         (Mstate_stmt_list (parser file) initial_state return continue)))))))
 
 ;returns the state after a list of statements
 (define Mstate_stmt_list
@@ -38,10 +38,10 @@
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
       ((eq? 'begin (operator stmt)) (Mstate_begin (cdr stmt) s return continue))
-      ((eq? 'continue (operator stmt)) (continue (cadr s)))
+      ((eq? 'continue (operator stmt)) (continue (caaadr s)))
       ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue))
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue))
-      ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s return continue))
+      ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s return continue)) ;no continue or break here, but include throw
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
       ((and (eq? 'var (operator stmt)) (null? (cddr stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
@@ -61,7 +61,7 @@
         (Mstate_stmt else s return continue))))
 
 ;returns the state of a while loop
-(define Mstate_while
+(define Mstate_while 
   (lambda (condition body s return continue)
     (if (Mvalue condition s)
         (Mstate_while condition body (Mstate_stmt body s return continue) return continue)
