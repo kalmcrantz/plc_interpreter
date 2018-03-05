@@ -10,19 +10,21 @@
     (call/cc
      (lambda (return)
        (call/cc
-        (lambda (continue)
-         (Mstate_stmt_list (parser file) initial_state return continue)))))))
+        (lambda (break)
+         (call/cc
+          (lambda (continue)
+              (Mstate_stmt_list (parser file) initial_state return continue break)))))))))
 
 ;returns the state after a list of statements
 (define Mstate_stmt_list
-  (lambda (slist s return continue)
+  (lambda (slist s return continue break)
        (if (null? slist)
         s
-        (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s return continue) return continue))))
+        (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s return continue break) return continue break))))
 
 ;returns the state that exists after the stmt is executed
 (define Mstate_stmt
-  (lambda (stmt s return continue)
+  (lambda (stmt s return continue break)
     (cond
       ((null? stmt) s)
       ((eq? 'return (operator stmt)) (return (Mstate_return stmt s return)))
@@ -37,35 +39,43 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'begin (operator stmt)) (Mstate_begin (cdr stmt) s return continue))
+      ((eq? 'begin (operator stmt)) (Mstate_begin (cdr stmt) s return continue break))
+      ((eq? 'break (operator stmt)) (break s))
       ((eq? 'continue (operator stmt)) (continue s))
-      ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue))
-      ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue))
-      ((eq? 'while (operator stmt)) (Mstate_while (first_operand stmt) (second_operand stmt) s return)) 
+      ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue break))
+      ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue break))
+      ((eq? 'while (operator stmt)) (Mstate_whileWrapper (first_operand stmt) (second_operand stmt) s return)) 
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
       ((and (eq? 'var (operator stmt)) (null? (cddr stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
 
 ;returns the state after a block of code enclosed in curly brackets
 (define Mstate_begin
-  (lambda (body s return continue)
+  (lambda (body s return continue break)
     (cond
       ((null? body) s)
-      (else (Mstate_begin (cdr body) (Mstate_stmt (car body) s return continue) return continue)))))
+      (else (Mstate_begin (cdr body) (Mstate_stmt (car body) s return continue break) return continue break)))))
 
 ;returns the state of an if-then statement
 (define Mstate_if
-  (lambda (condition then else s return continue)
+  (lambda (condition then else s return continue break)
     (if (Mvalue condition s)
-        (Mstate_stmt then s return continue)
-        (Mstate_stmt else s return continue))))
+        (Mstate_stmt then s return continue break)
+        (Mstate_stmt else s return continue break))))
 
 ;returns the state of a while loop
 (define Mstate_while 
-  (lambda (condition body s return)
+  (lambda (condition body s return break)
          (if (Mvalue condition s)
-             (Mstate_while condition body (call/cc (lambda (continue) (Mstate_stmt body s return continue))) return)
+             (Mstate_whileWrapper condition body (call/cc (lambda (continue) (Mstate_stmt body s return continue break))) return)
           s)))
+
+(define Mstate_whileWrapper
+  (lambda (condition body s return)
+    (call/cc
+     (lambda (break)
+       (Mstate_while condition body s return break)))))
+
 
 ;returns the state after a declaration
 (define Mstate_declare
