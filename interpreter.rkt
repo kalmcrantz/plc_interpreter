@@ -39,9 +39,9 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'begin (operator stmt)) (remove_layer (Mstate_begin (cdr stmt) (add_empty_layer s) return continue break)))
-      ((eq? 'break (operator stmt)) (break s))
-      ((eq? 'continue (operator stmt)) (continue s))
+      ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break))
+      ((eq? 'break (operator stmt)) (break (remove_layer s)))
+      ((eq? 'continue (operator stmt)) (continue (remove_layer s)))
       ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue break))
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue break))
       ((eq? 'while (operator stmt)) (Mstate_whileWrapper (first_operand stmt) (second_operand stmt) s return)) 
@@ -54,8 +54,8 @@
   (lambda (body s return continue break)
     (cond
       ((null? body) s)
-      ;(else (Mstate_begin (cdr body) (Mstate_stmt (car body) s return continue break) return continue break)))))
-      (else (Mstate_stmt_list body s return continue break)))))
+      ;(else (remove_layer (Mstate_begin (cdr body) (Mstate_stmt (car body) (add_empty_layer s) return continue break) return continue break))))))
+      (else (remove_layer (Mstate_stmt_list body (add_empty_layer s) return continue break))))))
 
 ;returns the state of an if-then statement
 (define Mstate_if
@@ -140,7 +140,7 @@
       ((eq? value 'false) #f)
       ((or (null? value) (null? (name_list s)) (null? (value_list s))) (raise 'Variable-not-declared))
       ((variable_in_top_layer? value s) (lookup_in_layer value (get_top_layer s)))
-      (else (Mvalue_var value (remove_layer s))))))
+      (else (Mvalue_var value (temp_remove_layer s))))))
 
 (define lookup_in_layer
   (lambda (value layer)
@@ -154,15 +154,15 @@
 ;paramters: 'name' of binding and 'value' of binding
 (define add_binding
   (lambda (name value s)
-    (add_specific_layer (add_binding_in_layer name value (list (top_name_list s) (top_value_list s))) (remove_layer s))))
+    (add_specific_layer (add_binding_in_layer name value (list (top_name_list s) (top_value_list s))) (temp_remove_layer s))))
 
 ;updates the variable with the value
 (define update_binding
   (lambda (variable value s)
     (cond
       ((or (null? value) (null? s)) (raise 'No-given-variable))
-      ((variable_in_top_layer? variable s) (add_specific_layer (update_binding_in_layer variable value (list (top_name_list s) (top_value_list s))) (remove_layer s)))
-      (else (add_specific_layer (list (top_name_list s) (top_value_list s)) (update_binding variable value (remove_layer s)))))))
+      ((variable_in_top_layer? variable s) (add_specific_layer (update_binding_in_layer variable value (list (top_name_list s) (top_value_list s))) (temp_remove_layer s)))
+      (else (add_specific_layer (list (top_name_list s) (top_value_list s)) (update_binding variable value (temp_remove_layer s)))))))
        
 (define update_binding_in_layer
   (lambda (variable value layer)
@@ -203,8 +203,14 @@
 ;removes the top layer of the state
 (define remove_layer
   (lambda (s)
+    (if (or (null? s) (null? (cdr (car s))))
+        (raise 'Cannot-remove-layer)
+        (list (cdr (car s)) (cdr (car (cdr s)))))))
+
+(define temp_remove_layer
+  (lambda (s)
     (if (null? s)
-        s
+        (raise 'Cannot-remove-layer)
         (list (cdr (car s)) (cdr (car (cdr s)))))))
 
 ;gets the name list of the top layer
