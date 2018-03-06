@@ -39,7 +39,7 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'begin (operator stmt)) (Mstate_begin (cdr stmt) s return continue break))
+      ((eq? 'begin (operator stmt)) (remove_layer (Mstate_begin (cdr stmt) (add_empty_layer s) return continue break)))
       ((eq? 'break (operator stmt)) (break s))
       ((eq? 'continue (operator stmt)) (continue s))
       ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue break))
@@ -54,7 +54,8 @@
   (lambda (body s return continue break)
     (cond
       ((null? body) s)
-      (else (Mstate_begin (cdr body) (Mstate_stmt (car body) s return continue break) return continue break)))))
+      ;(else (Mstate_begin (cdr body) (Mstate_stmt (car body) s return continue break) return continue break)))))
+      (else (Mstate_stmt_list body s return continue break)))))
 
 ;returns the state of an if-then statement
 (define Mstate_if
@@ -67,7 +68,7 @@
 (define Mstate_while 
   (lambda (condition body s return break)
          (if (Mvalue condition s)
-             (Mstate_whileWrapper condition body (call/cc (lambda (continue) (Mstate_stmt body s return continue break))) return)
+             (Mstate_while condition body (call/cc (lambda (continue) (Mstate_stmt body s return continue break))) return break)
           s)))
 
 (define Mstate_whileWrapper
@@ -75,7 +76,6 @@
     (call/cc
      (lambda (break)
        (Mstate_while condition body s return break)))))
-
 
 ;returns the state after a declaration
 (define Mstate_declare
@@ -162,7 +162,7 @@
     (cond
       ((or (null? value) (null? s)) (raise 'No-given-variable))
       ((variable_in_top_layer? variable s) (add_specific_layer (update_binding_in_layer variable value (list (top_name_list s) (top_value_list s))) (remove_layer s)))
-      (else (add_specific_layer (list (top_name_list s) (top_value_list s)) (remove_layer s))))))
+      (else (add_specific_layer (list (top_name_list s) (top_value_list s)) (update_binding variable value (remove_layer s)))))))
        
 (define update_binding_in_layer
   (lambda (variable value layer)
