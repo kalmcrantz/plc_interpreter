@@ -9,7 +9,4 @@ try {
 catch(e) {
   x = e;
 }
-finally {
-  x = x + 100;
-}
 return x;
