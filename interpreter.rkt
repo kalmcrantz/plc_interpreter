@@ -1,5 +1,3 @@
-;Kimberly Almcrantz (kaa97) Jenny Zhao (sxz402)
-
 #lang racket
 
 (require "simpleParser.scm")
@@ -41,9 +39,8 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'try (operator stmt)) (Mstate_finally (third_operand stmt) (Mstate_try (second_operand stmt) (third_operand stmt) stmt s return continue break) return continue break throw))
-      ((eq? 'finally (operator stmt)) (Mstate_finally stmt s return continue break throw))
-      ((eq? 'throw (operator stmt)) (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) s )))
+      ((eq? 'try (operator stmt)) (Mstate_finally (cadr (third_operand stmt)) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (cdr (second_operand stmt)) s return continue break))) return continue break throw))
+      ((eq? 'throw (operator stmt)) (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) (add_empty_layer s ))))
       ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
       ((eq? 'continue (operator stmt)) (continue (remove_layer s)))
@@ -56,29 +53,38 @@
 ;((var x) (try ((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5))) (catch (e) ((= x e))) (finally ((= x (+ x 100))))) (return x))
 ;((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5)))
 ;(((= x (+ x 100))))
-;((finally ((= x (... ... ...)))))
+
+;body: the body of the try
+;catch: a list in which the first element is the list of parameters for the catch/throw, and the second element is the body
+(define Mstate_try_catch
+  (lambda (body catch s return continue break)
+    (cond
+      ((null? body) (break s))
+      (else (Mstate_catch catch (call/cc (lambda (throw) (Mstate_try_catch (cdr body) catch (Mstate_stmt (car body) s return continue break throw) return continue break))) return continue break)))))
+                                             
+
 (define Mstate_try
-  (lambda (catch finally body s return continue break)
+  (lambda (catch body s return continue break)
     (call/cc
      (lambda (throw)
       (cond
        ((null? body) s)
-       ((null? (cdr body)) (Mstate_stmt_list body s return continue break throw))
-       ((eq? 'throw (operator body)) (Mstate_finally finally (Mstate_catch catch s return continue break throw) return continue break throw))
-       (else (Mstate_try catch finally (cadr body) (Mstate_stmt (caadr body) s return continue break throw) return continue break)))))))
+       (else (Mstate_try catch (cdr body) (Mstate_stmt_list (operator body) s return continue break throw) return continue break)))))))
 
 (define Mstate_catch
-  (lambda (body s return continue break throw)
+  (lambda (body s return continue break)
+    (call/cc
+     (lambda (throw)
      (cond
       ((null? body) s)
       ((eq? 'throw body) raise 'invalid-catch)
-      (else (Mstate_stmt (caaddr body) s return continue break throw)))))
+      (else (Mstate_stmt_list (cadr body) s return continue break throw)))))))
 
 (define Mstate_finally
   (lambda (body s return continue break throw)
     (cond
     ((null? body) s)
-    (else (Mstate_stmt_list (cadr body) s return continue break throw)))))
+    (else (Mstate_stmt_list body s return continue break throw)))))
       
 
 ;returns the state after a block of code enclosed in curly brackets
@@ -287,4 +293,3 @@
 
 ;returns the inital state at the very beginning of a program
 (define initial_state '((())(())))
-
