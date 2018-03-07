@@ -41,7 +41,7 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'try (operator stmt)) (Mstate_finally (cadr (third_operand stmt)) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (cdr (second_operand stmt)) s return continue break))) return continue break throw))
+      ((eq? 'try (operator stmt)) (Mstate_finally (cadr (third_operand stmt)) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (cdr (second_operand stmt)) s return continue break throw))) return continue break throw))
       ((eq? 'throw (operator stmt)) (remove_layer (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) (add_empty_layer s)))))
       ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
@@ -59,19 +59,17 @@
 ;body: the body of the try
 ;catch: a list in which the first element is the list of parameters for the catch/throw, and the second element is the body
 (define Mstate_try_catch
-  (lambda (body catch s return continue break)
+  (lambda (body catch s return continue break throw)
     (cond
       ((null? body) (break s))
-      (else (Mstate_catch catch (call/cc (lambda (throw) (Mstate_try_catch (cdr body) catch (Mstate_stmt (car body) s return continue break throw) return continue break))) return continue break)))))
+      (else (Mstate_catch catch (call/cc (lambda (throw1) (Mstate_try_catch (cdr body) catch (Mstate_stmt (car body) s return continue break throw) return continue break throw1))) return continue break throw)))))
 
 (define Mstate_catch
-  (lambda (body s return continue break)
-    (call/cc
-     (lambda (throw)
+  (lambda (body s return continue break throw)
      (cond
       ((null? body) s)
       ((eq? 'throw body) raise 'invalid-catch)
-      (else (Mstate_stmt_list (cadr body) s return continue break throw)))))))
+      (else (Mstate_stmt_list (cadr body) s return continue break throw)))))
 
 (define Mstate_finally
   (lambda (body s return continue break throw)

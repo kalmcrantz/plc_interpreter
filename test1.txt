@@ -1,15 +1,15 @@
 var x;
 
 try {
-	x = 0;
-	if (x > -100) {
-		throw 1;
-	}
+  x = 20;
+  if (x < 0)
+    throw 10;
+  x = x + 5;
 }
 catch(e) {
-  x = x + e;
+  x = e;
 }
 finally {
-  x = x + 0;
+  x = x + 100;
 }
 return x;
