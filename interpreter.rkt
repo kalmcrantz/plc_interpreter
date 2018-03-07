@@ -13,18 +13,20 @@
         (lambda (break)
          (call/cc
           (lambda (continue)
-              (Mstate_stmt_list (parser file) initial_state return continue break)))))))))
+            (call/cc
+             (lambda (throw)
+              (Mstate_stmt_list (parser file) initial_state return continue break throw)))))))))))
 
 ;returns the state after a list of statements
 (define Mstate_stmt_list
-  (lambda (slist s return continue break)
+  (lambda (slist s return continue break throw)
        (if (null? slist)
         s
-        (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s return continue break) return continue break))))
+        (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s return continue break throw) return continue break throw))))
 
 ;returns the state that exists after the stmt is executed
 (define Mstate_stmt
-  (lambda (stmt s return continue break)
+  (lambda (stmt s return continue break throw)
     (cond
       ((null? stmt) s)
       ((eq? 'return (operator stmt)) (return (Mstate_return stmt s return)))
@@ -39,43 +41,68 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break))
+      ((eq? 'try (operator stmt)) (Mstate_finally (third_operand stmt) (Mstate_catch (second_operand stmt) (Mstate_try stmt s return continue break)return continue break throw) return continue break throw))
+      ((eq? 'throw (operator stmt)) (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) s )))
+      ((eq? 'finally (operator stmt)) (Mstate_finally (cdr stmt) s return continue break throw))
+      ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
       ((eq? 'continue (operator stmt)) (continue (remove_layer s)))
-      ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue break))
+      ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue break throw))
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue break))
-      ((eq? 'while (operator stmt)) (Mstate_whileWrapper (first_operand stmt) (second_operand stmt) s return)) 
+      ((eq? 'while (operator stmt)) (Mstate_whileWrapper (first_operand stmt) (second_operand stmt) s return throw)) 
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
       ((and (eq? 'var (operator stmt)) (null? (cddr stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
+;((var x) (try ((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5))) (catch (e) ((= x e))) (finally ((= x (+ x 100))))) (return x))
+;((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5)))
+;(((= x (+ x 100))))
+
+(define Mstate_try
+  (lambda (body s return continue break)
+    (call/cc
+     (lambda (throw)
+      (cond
+       ((null? body) s)
+        (else (Mstate_stmt_list (first_operand body) s return continue break throw) ))))))
+
+(define Mstate_catch
+  (lambda (body s return continue break throw)
+    (cond
+      ((null? body) s)
+      (else (Mstate_stmt (caaddr body) s return continue break throw)))))
+
+(define Mstate_finally
+  (lambda (body s return continue break throw)
+    (Mstate_stmt_list (cadr body) s return continue break throw)))
+      
 
 ;returns the state after a block of code enclosed in curly brackets
 (define Mstate_begin
-  (lambda (body s return continue break)
+  (lambda (body s return continue break throw)
     (cond
       ((null? body) s)
       ;(else (remove_layer (Mstate_begin (cdr body) (Mstate_stmt (car body) (add_empty_layer s) return continue break) return continue break))))))
-      (else (remove_layer (Mstate_stmt_list body (add_empty_layer s) return continue break))))))
+      (else (remove_layer (Mstate_stmt_list body (add_empty_layer s) return continue break throw))))))
 
 ;returns the state of an if-then statement
 (define Mstate_if
-  (lambda (condition then else s return continue break)
+  (lambda (condition then else s return continue break throw)
     (if (Mvalue condition s)
-        (Mstate_stmt then s return continue break)
-        (Mstate_stmt else s return continue break))))
+        (Mstate_stmt then s return continue break throw)
+        (Mstate_stmt else s return continue break throw))))
 
 ;returns the state of a while loop
 (define Mstate_while 
-  (lambda (condition body s return break)
+  (lambda (condition body s return break throw)
          (if (Mvalue condition s)
-             (Mstate_while condition body (call/cc (lambda (continue) (Mstate_stmt body s return continue break))) return break)
+             (Mstate_while condition body (call/cc (lambda (continue) (Mstate_stmt body s return continue break throw))) return break throw)
           s)))
 
 (define Mstate_whileWrapper
-  (lambda (condition body s return)
+  (lambda (condition body s return throw)
     (call/cc
      (lambda (break)
-       (Mstate_while condition body s return break)))))
+       (Mstate_while condition body s return break throw)))))
 
 ;returns the state after a declaration
 (define Mstate_declare
@@ -255,3 +282,4 @@
 
 ;returns the inital state at the very beginning of a program
 (define initial_state '((())(())))
+
