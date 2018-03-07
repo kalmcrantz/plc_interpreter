@@ -73,7 +73,9 @@
 
 (define Mstate_finally
   (lambda (body s return continue break throw)
-    (Mstate_stmt_list (cadr body) s return continue break throw)))
+    (cond
+    ((null? body) s)
+    (else (Mstate_stmt_list (cadr body) s return continue break throw)))))
       
 
 ;returns the state after a block of code enclosed in curly brackets
