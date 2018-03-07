@@ -42,7 +42,7 @@
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
       ((eq? 'try (operator stmt)) (Mstate_finally (cadr (third_operand stmt)) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (cdr (second_operand stmt)) s return continue break))) return continue break throw))
-      ((eq? 'throw (operator stmt)) (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) (add_empty_layer s ))))
+      ((eq? 'throw (operator stmt)) (remove_layer (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) (add_empty_layer s)))))
       ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
       ((eq? 'continue (operator stmt)) (continue (remove_layer s)))
@@ -63,15 +63,6 @@
     (cond
       ((null? body) (break s))
       (else (Mstate_catch catch (call/cc (lambda (throw) (Mstate_try_catch (cdr body) catch (Mstate_stmt (car body) s return continue break throw) return continue break))) return continue break)))))
-                                             
-
-(define Mstate_try
-  (lambda (catch body s return continue break)
-    (call/cc
-     (lambda (throw)
-      (cond
-       ((null? body) s)
-       (else (Mstate_try catch (cdr body) (Mstate_stmt_list (operator body) s return continue break throw) return continue break)))))))
 
 (define Mstate_catch
   (lambda (body s return continue break)
@@ -253,6 +244,12 @@
         (raise 'Cannot-remove-layer)
         (list (cdr (car s)) (cdr (car (cdr s)))))))
 
+(define remove_first_binding
+  (lambda (layer)
+    (if (null? layer)
+        layer
+        (list (cdr (name_list layer)) (cdr (value_list layer))))))
+
 ;gets the name list of the top layer
 (define top_name_list
   (lambda (s)
@@ -262,6 +259,20 @@
 (define top_value_list
   (lambda (s)
     (car (car (cdr s)))))
+
+(define rename_variable
+  (lambda (old_name new_name s)
+    (cond
+      ((null? s) s)
+      ((variable_in_top_layer? old_name s) (add_specific_layer (rename_variable_in_layer old_name new_name (get_top_layer s)) (temp_remove_layer s)))
+      (else (add_specific_layer (get_top_layer s) (rename_variable old_name new_name (temp_remove_layer s)))))))      
+
+(define rename_variable_in_layer
+  (lambda (old_name new_name layer)
+    (cond
+      ((null? layer) layer)
+      ((eq? old_name (car (name_list layer))) (list (cons new_name (cdr (name_list layer))) (value_list layer)))
+      (else (add_binding_in_layer (car (name_list layer)) (car (value_list layer)) (rename_variable_in_layer old_name new_name (remove_first_binding layer)))))))
      
 ;returns whether or not the variable is declared in the state s
 (define variable_declared?
