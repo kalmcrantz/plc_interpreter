@@ -41,8 +41,8 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'try (operator stmt)) (Mstate_finally (cadr (third_operand stmt)) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (cdr (second_operand stmt)) s return continue break throw))) return continue break throw))
-      ((eq? 'throw (operator stmt)) (remove_layer (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) (add_empty_layer s)))))
+      ((eq? 'try (operator stmt)) (Mstate_finally  (third_operand stmt) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (second_operand stmt) s return continue break throw))) return continue break throw))
+      ((eq? 'throw (operator stmt)) (remove_layer (throw (Mstate_declare_and_assign 'temp (Mvalue (cadr stmt) s) (add_empty_layer s)))))
       ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
       ((eq? 'continue (operator stmt)) (continue (remove_layer s)))
@@ -68,14 +68,14 @@
   (lambda (body s return continue break throw)
      (cond
       ((null? body) s)
-      ((eq? 'throw body) raise 'invalid-catch)
-      (else (Mstate_stmt_list (cadr body) s return continue break throw)))))
+      ((eq? 'throw (cdr body)) raise 'invalid-catch)
+      (else (Mstate_stmt_list (caddr body) (rename_variable 'temp (car (cadr body)) s) return continue break throw)))))
 
 (define Mstate_finally
   (lambda (body s return continue break throw)
     (cond
     ((null? body) s)
-    (else (Mstate_stmt_list body s return continue break throw)))))
+    (else (Mstate_stmt_list (cadr body) s return continue break throw)))))
       
 
 ;returns the state after a block of code enclosed in curly brackets
