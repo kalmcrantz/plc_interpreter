@@ -41,7 +41,8 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'try (operator stmt)) (Mstate_finally (third_operand stmt) (Mstate_try (second_operand stmt) stmt s return continue break)return continue break throw))
+      ((eq? 'try (operator stmt)) (Mstate_finally (third_operand stmt) (Mstate_try (second_operand stmt) (third_operand stmt) stmt s return continue break) return continue break throw))
+      ((eq? 'finally (operator stmt)) (Mstate_finally stmt s return continue break throw))
       ((eq? 'throw (operator stmt)) (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) s )))
       ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
@@ -55,24 +56,23 @@
 ;((var x) (try ((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5))) (catch (e) ((= x e))) (finally ((= x (+ x 100))))) (return x))
 ;((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5)))
 ;(((= x (+ x 100))))
-
+;((finally ((= x (... ... ...)))))
 (define Mstate_try
-  (lambda (catch body s return continue break)
+  (lambda (catch finally body s return continue break)
     (call/cc
      (lambda (throw)
       (cond
        ((null? body) s)
-       ((eq? 'throw (operator body)) (Mstate_catch catch s return continue break throw))
-       (else (Mstate_try catch (cdr body) (Mstate_stmt_list (operator body) s return continue break throw) return continue break)))))))
+       ((null? (cdr body)) (Mstate_stmt_list body s return continue break throw))
+       ((eq? 'throw (operator body)) (Mstate_finally finally (Mstate_catch catch s return continue break throw) return continue break throw))
+       (else (Mstate_try catch finally (cadr body) (Mstate_stmt (caadr body) s return continue break throw) return continue break)))))))
 
 (define Mstate_catch
   (lambda (body s return continue break throw)
-    (call/cc
-     (lambda (throw)
      (cond
       ((null? body) s)
       ((eq? 'throw body) raise 'invalid-catch)
-      (else (Mstate_stmt (caaddr body) s return continue break throw)))))))
+      (else (Mstate_stmt (caaddr body) s return continue break throw)))))
 
 (define Mstate_finally
   (lambda (body s return continue break throw)
