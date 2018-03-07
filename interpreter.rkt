@@ -41,9 +41,8 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'try (operator stmt)) (Mstate_finally (third_operand stmt) (Mstate_catch (second_operand stmt) (Mstate_try stmt s return continue break)return continue break throw) return continue break throw))
+      ((eq? 'try (operator stmt)) (Mstate_finally (third_operand stmt) (Mstate_try (second_operand stmt) stmt s return continue break)return continue break throw))
       ((eq? 'throw (operator stmt)) (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) s )))
-      ((eq? 'finally (operator stmt)) (Mstate_finally (cdr stmt) s return continue break throw))
       ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
       ((eq? 'continue (operator stmt)) (continue (remove_layer s)))
@@ -58,19 +57,22 @@
 ;(((= x (+ x 100))))
 
 (define Mstate_try
-  (lambda (body s return continue break)
+  (lambda (catch body s return continue break)
     (call/cc
      (lambda (throw)
       (cond
        ((null? body) s)
-        (else (Mstate_stmt_list (first_operand body) s return continue break throw) ))))))
+       ((eq? 'throw (operator body)) (Mstate_catch catch s return continue break throw))
+       (else (Mstate_try catch (cdr body) (Mstate_stmt_list (operator body) s return continue break throw) return continue break)))))))
 
 (define Mstate_catch
   (lambda (body s return continue break throw)
-    (cond
+    (call/cc
+     (lambda (throw)
+     (cond
       ((null? body) s)
       ((eq? 'throw body) raise 'invalid-catch)
-      (else (Mstate_stmt (caaddr body) s return continue break throw)))))
+      (else (Mstate_stmt (caaddr body) s return continue break throw)))))))
 
 (define Mstate_finally
   (lambda (body s return continue break throw)
