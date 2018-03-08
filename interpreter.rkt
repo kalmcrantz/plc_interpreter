@@ -62,13 +62,13 @@
   (lambda (body catch s return continue break throw)
     (cond
       ((null? body) (break s))
-      (else (Mstate_catch catch (call/cc (lambda (throw1) (Mstate_try_catch (cdr body) catch (Mstate_stmt (car body) s return continue break throw) return continue break throw1))) return continue break throw)))))
+      (else (Mstate_catch catch (call/cc (lambda (throw1) (Mstate_try_catch (cdr body) catch (Mstate_stmt (car body) s return continue break throw1) return continue break throw1))) return continue break throw)))))
 
 (define Mstate_catch
   (lambda (body s return continue break throw)
      (cond
       ((null? body) s)
-      ((eq? 'throw (cdr body)) raise 'invalid-catch)
+      ((eq? 'throw (cdr body)) (raise 'invalid-catch))
       (else (Mstate_stmt_list (caddr body) (rename_variable 'temp (car (cadr body)) s) return continue break throw)))))
 
 (define Mstate_finally
@@ -238,8 +238,8 @@
 
 (define temp_remove_layer
   (lambda (s)
-    (if (null? s)
-        (raise 'Cannot-remove-layer)
+    (if (or (null? s) (null? (cdr (car s))))
+        '((())(()))
         (list (cdr (car s)) (cdr (car (cdr s)))))))
 
 (define remove_first_binding
@@ -261,14 +261,14 @@
 (define rename_variable
   (lambda (old_name new_name s)
     (cond
-      ((null? s) s)
+      ((or (null? s) (null? (name_list s)) (null? (top_name_list s))) '((())(())))
       ((variable_in_top_layer? old_name s) (add_specific_layer (rename_variable_in_layer old_name new_name (get_top_layer s)) (temp_remove_layer s)))
       (else (add_specific_layer (get_top_layer s) (rename_variable old_name new_name (temp_remove_layer s)))))))      
 
 (define rename_variable_in_layer
   (lambda (old_name new_name layer)
     (cond
-      ((null? layer) layer)
+      ((or (null? layer) (null? (name_list layer))) '(()()))
       ((eq? old_name (car (name_list layer))) (list (cons new_name (cdr (name_list layer))) (value_list layer)))
       (else (add_binding_in_layer (car (name_list layer)) (car (value_list layer)) (rename_variable_in_layer old_name new_name (remove_first_binding layer)))))))
      
