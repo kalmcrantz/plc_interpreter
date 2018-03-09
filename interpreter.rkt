@@ -4,8 +4,14 @@
 
 (require "simpleParser.scm")
 
-;this is the method that should be called to interpret a file
 (define evaluate
+  (lambda (file)
+    (if (list? (evaluateWrapper file))
+        (raise 'Invalid-return)
+        (evaluateWrapper file))))
+
+;this is the method that should be called to interpret a file
+(define evaluateWrapper
   (lambda (file)
     (call/cc
      (lambda (return)
@@ -234,7 +240,7 @@
 
 (define temp_remove_layer
   (lambda (s)
-    (if (or (null? s) (null? (cdr (car s))))
+    (if (or (null? s))
         '((())(()))
         (list (cdr (car s)) (cdr (car (cdr s)))))))
 
