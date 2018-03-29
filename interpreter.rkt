@@ -1,9 +1,17 @@
+;Kimberly Almcrantz (kaa97) Jenny Zhao (sxz402)
+
 #lang racket
 
 (require "simpleParser.scm")
 
-;this is the method that should be called to interpret a file
 (define evaluate
+  (lambda (file)
+    (if (list? (evaluateWrapper file))
+        (raise 'Invalid-return)
+        (evaluateWrapper file))))
+
+;this is the method that should be called to interpret a file
+(define evaluateWrapper
   (lambda (file)
     (call/cc
      (lambda (return)
@@ -20,7 +28,7 @@
   (lambda (slist s return continue break throw)
        (if (null? slist)
         s
-        (Mstate_stmt_list (cdr slist) (Mstate_stmt (car slist) s return continue break throw) return continue break throw))))
+        (Mstate_stmt_list (rest-of slist) (Mstate_stmt (pop slist) s return continue break throw) return continue break throw))))
 
 ;returns the state that exists after the stmt is executed
 (define Mstate_stmt
@@ -39,52 +47,38 @@
            (eq? '<= (operator stmt))
            (eq? '== (operator stmt))
            (eq? '!= (operator stmt))) (Mvalue stmt s))
-      ((eq? 'try (operator stmt)) (Mstate_finally (cadr (third_operand stmt)) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (cdr (second_operand stmt)) s return continue break))) return continue break throw))
-      ((eq? 'throw (operator stmt)) (throw (Mstate_declare_and_assign 'e (Mvalue (cadr stmt) s) (add_empty_layer s ))))
-      ((eq? 'begin (operator stmt))  (Mstate_begin (cdr stmt) s return continue break throw))
+      ((eq? 'try (operator stmt)) (Mstate_finally  (third_operand stmt) (call/cc (lambda (break) (Mstate_try_catch (first_operand stmt) (second_operand stmt) s return continue break throw))) return continue break throw))
+      ((eq? 'throw (operator stmt)) (remove_layer (throw (Mstate_declare_and_assign 'temp (Mvalue (first_operand stmt) s) (add_empty_layer s)))))
+      ((eq? 'begin (operator stmt))  (Mstate_begin (rest-of stmt) s return continue break throw))
       ((eq? 'break (operator stmt)) (break (remove_layer s)))
       ((eq? 'continue (operator stmt)) (continue (remove_layer s)))
-      ((and (eq? 'if (operator stmt)) (null? (cdddr stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue break throw))
+      ((and (eq? 'if (operator stmt)) (null? (else-stmt stmt))) (Mstate_if (first_operand stmt) (second_operand stmt) null s return continue break throw))
       ((eq? 'if (operator stmt)) (Mstate_if (first_operand stmt) (second_operand stmt) (third_operand stmt) s return continue break throw))
       ((eq? 'while (operator stmt)) (Mstate_whileWrapper (first_operand stmt) (second_operand stmt) s return throw)) 
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
-      ((and (eq? 'var (operator stmt)) (null? (cddr stmt))) (Mstate_declare (first_operand stmt) s))
+      ((and (eq? 'var (operator stmt)) (null? (var-value stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
-;((var x) (try ((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5))) (catch (e) ((= x e))) (finally ((= x (+ x 100))))) (return x))
-;((= x 20) (if (< x 0) (throw 10)) (= x (+ x 5)))
-;(((= x (+ x 100))))
 
 ;body: the body of the try
 ;catch: a list in which the first element is the list of parameters for the catch/throw, and the second element is the body
 (define Mstate_try_catch
-  (lambda (body catch s return continue break)
+  (lambda (body catch s return continue break throw)
     (cond
       ((null? body) (break s))
-      (else (Mstate_catch catch (call/cc (lambda (throw) (Mstate_try_catch (cdr body) catch (Mstate_stmt (car body) s return continue break throw) return continue break))) return continue break)))))
-                                             
-
-(define Mstate_try
-  (lambda (catch body s return continue break)
-    (call/cc
-     (lambda (throw)
-      (cond
-       ((null? body) s)
-       (else (Mstate_try catch (cdr body) (Mstate_stmt_list (operator body) s return continue break throw) return continue break)))))))
+      (else (Mstate_catch catch (call/cc (lambda (throw1) (Mstate_try_catch (rest-of body) catch (Mstate_stmt (pop body) s return continue break throw1) return continue break throw1))) return continue break throw)))))
 
 (define Mstate_catch
-  (lambda (body s return continue break)
-    (call/cc
-     (lambda (throw)
+  (lambda (body s return continue break throw)
      (cond
       ((null? body) s)
-      ((eq? 'throw body) raise 'invalid-catch)
-      (else (Mstate_stmt_list (cadr body) s return continue break throw)))))))
+      ((eq? 'throw (rest-of body)) (raise 'invalid-catch))
+      (else (Mstate_stmt_list (second_operand body) (rename_variable 'temp (pop (first_operand body)) s) return continue break throw)))))
 
 (define Mstate_finally
   (lambda (body s return continue break throw)
     (cond
     ((null? body) s)
-    (else (Mstate_stmt_list body s return continue break throw)))))
+    (else (Mstate_stmt_list (first_operand body) s return continue break throw)))))
       
 
 ;returns the state after a block of code enclosed in curly brackets
@@ -92,7 +86,6 @@
   (lambda (body s return continue break throw)
     (cond
       ((null? body) s)
-      ;(else (remove_layer (Mstate_begin (cdr body) (Mstate_stmt (car body) (add_empty_layer s) return continue break) return continue break))))))
       (else (remove_layer (Mstate_stmt_list body (add_empty_layer s) return continue break throw))))))
 
 ;returns the state of an if-then statement
@@ -247,9 +240,15 @@
 
 (define temp_remove_layer
   (lambda (s)
-    (if (null? s)
-        (raise 'Cannot-remove-layer)
+    (if (or (null? s))
+        '((())(()))
         (list (cdr (car s)) (cdr (car (cdr s)))))))
+
+(define remove_first_binding
+  (lambda (layer)
+    (if (null? layer)
+        layer
+        (list (cdr (name_list layer)) (cdr (value_list layer))))))
 
 ;gets the name list of the top layer
 (define top_name_list
@@ -260,6 +259,20 @@
 (define top_value_list
   (lambda (s)
     (car (car (cdr s)))))
+
+(define rename_variable
+  (lambda (old_name new_name s)
+    (cond
+      ((or (null? s) (null? (name_list s)) (null? (top_name_list s))) '((())(())))
+      ((variable_in_top_layer? old_name s) (add_specific_layer (rename_variable_in_layer old_name new_name (get_top_layer s)) (temp_remove_layer s)))
+      (else (add_specific_layer (get_top_layer s) (rename_variable old_name new_name (temp_remove_layer s)))))))      
+
+(define rename_variable_in_layer
+  (lambda (old_name new_name layer)
+    (cond
+      ((or (null? layer) (null? (name_list layer))) '(()()))
+      ((eq? old_name (car (name_list layer))) (list (cons new_name (cdr (name_list layer))) (value_list layer)))
+      (else (add_binding_in_layer (car (name_list layer)) (car (value_list layer)) (rename_variable_in_layer old_name new_name (remove_first_binding layer)))))))
      
 ;returns whether or not the variable is declared in the state s
 (define variable_declared?
@@ -279,6 +292,18 @@
   (lambda (s)
     (car (cdr s))))
 
+;value of variable
+(define var-value cddr)
+ 
+;else statement of if 
+(define else-stmt cdddr)
+
+;retrives rest of list
+(define rest-of cdr)
+
+;retrives first element from list
+(define pop car)
+  
 ;returns the first element of a list (operator)
 (define operator car)
 
@@ -293,3 +318,4 @@
 
 ;returns the inital state at the very beginning of a program
 (define initial_state '((())(())))
+
