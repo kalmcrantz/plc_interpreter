@@ -2,7 +2,7 @@
 
 #lang racket
 
-(require "simpleParser.scm")
+(require "functionParser.scm")
 
 (define evaluate
   (lambda (file)
@@ -35,6 +35,7 @@
   (lambda (stmt s return continue break throw)
     (cond
       ((null? stmt) s)
+      ((eq? 'function (operator stmt)) (Mstate_function_declaration (rest-of stmt) s))
       ((eq? 'return (operator stmt)) (return (Mstate_return stmt s return)))
       ((or (eq? '+ (operator stmt))
            (eq? '- (operator stmt))
@@ -58,6 +59,20 @@
       ((eq? '= (operator stmt)) (Mstate_assign (first_operand stmt) (second_operand stmt) s))
       ((and (eq? 'var (operator stmt)) (null? (var-value stmt))) (Mstate_declare (first_operand stmt) s))
       ((eq? 'var (operator stmt)) (Mstate_declare_and_assign (first_operand stmt) (second_operand stmt) s)))))
+
+(define Mstate_function_declaration
+  (lambda (stmt s)
+    (Mstate_declare_and_assign (function_name stmt) (make_closure stmt s) s)))
+
+;creates a closure for a function
+;list containing the variables in scope, the formal parameters, and the body of the function
+(define make_closure
+  (lambda (stmt s)
+    (list (get_in_scope s) (list (function_formal_params stmt) (function_body stmt)))))
+
+(define get_in_scope
+  (lambda (s)
+    s))
 
 ;body: the body of the try
 ;catch: a list in which the first element is the list of parameters for the catch/throw, and the second element is the body
@@ -319,3 +334,7 @@
 ;returns the inital state at the very beginning of a program
 (define initial_state '((())(())))
 
+(define function_name car)
+(define closure_in_scope car)
+(define function_formal_params cadr)
+(define function_body caddr)
