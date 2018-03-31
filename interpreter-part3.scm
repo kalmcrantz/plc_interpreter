@@ -17,7 +17,7 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (parser file) (newenvironment) return
+        (interpret-function 'main (create-outer-layer (parser file)) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -32,6 +32,8 @@
 (define interpret-statement
   (lambda (statement environment return break continue throw)
     (cond
+      ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment))
+      ((eq? 'funcall (statement-type statement)) (interpret-function statement environment return break continue throw))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment))
@@ -43,6 +45,35 @@
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
+
+; creates the outer layer for a program
+(define create-outer-layer
+  (lambda (stmt-list)
+    (interpret-statement-list stmt-list (newenvironment)
+                              (lambda (env) (myerror "Return used outside of method")) (lambda (env) (myerror "Break used outside of loop"))
+                              (lambda (env) (myerror "Continue used outside of loop")) (lambda (v env) (myerror "Uncaught exception thrown")))))
+
+; returns the value of a function
+(define interpret-function
+  (lambda (statement environment return break continue throw)
+    (call/cc
+     (lambda (return1)
+       (interpret-statement-list (cadr (lookup statement environment)) (push-frame environment) return1 break continue throw)))))
+
+; adds the function definition to the environment
+(define interpret-function-declaration
+  (lambda (statement environment)
+    (insert (get-declare-var statement) (create-closure statement environment) environment)))
+
+; creates a closure for a function
+(define create-closure
+  (lambda (statement environment)
+    (cons (operand2 statement) (cons (operand3 statement) (create-environment environment)))))
+
+; creates the environment for a function
+(define create-environment
+  (lambda (environment)
+    environment))
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
@@ -160,6 +191,10 @@
   (lambda (expr environment)
     (cond
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment)))
+      ((eq? 'funcall (operator expr)) (call/cc
+                                       (lambda (return)
+                                         (interpret-function (operand1 expr) environment return (lambda (v) (myerror "cannot break here"))
+                                                             (lambda (v) (myerror "cannot continue here")) (lambda (v) (myerror "cannot throw here"))))))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment)))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment) environment)))))
 

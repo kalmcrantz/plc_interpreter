@@ -2,7 +2,7 @@
 
 #lang racket
 
-(require "functionParser.scm")
+(require "simpleParser.scm")
 
 (define evaluate
   (lambda (file)
@@ -62,7 +62,11 @@
 
 (define Mstate_function_declaration
   (lambda (stmt s)
-    (Mstate_declare_and_assign (function_name stmt) (make_closure stmt s) s)))
+    (Mstate_add_function (function_name stmt) (make_closure stmt s) s)))
+
+(define Mstate_add_function
+  (lambda (name closure s)
+    s))
 
 ;creates a closure for a function
 ;list containing the variables in scope, the formal parameters, and the body of the function
