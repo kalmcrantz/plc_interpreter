@@ -46,26 +46,31 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
+; creates the outer layer for a program
 (define create-outer-layer
   (lambda (stmt-list)
     (interpret-statement-list stmt-list (newenvironment)
                               (lambda (env) (myerror "Return used outside of method")) (lambda (env) (myerror "Break used outside of loop"))
                               (lambda (env) (myerror "Continue used outside of loop")) (lambda (v env) (myerror "Uncaught exception thrown")))))
 
+; returns the value of a function
 (define interpret-function
   (lambda (statement environment return break continue throw)
     (call/cc
      (lambda (return1)
        (interpret-statement-list (cadr (lookup statement environment)) (push-frame environment) return1 break continue throw)))))
 
+; adds the function definition to the environment
 (define interpret-function-declaration
   (lambda (statement environment)
     (insert (get-declare-var statement) (create-closure statement environment) environment)))
 
+; creates a closure for a function
 (define create-closure
   (lambda (statement environment)
     (cons (operand2 statement) (cons (operand3 statement) (create-environment environment)))))
 
+; creates the environment for a function
 (define create-environment
   (lambda (environment)
     environment))
