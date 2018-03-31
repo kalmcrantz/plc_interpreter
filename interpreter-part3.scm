@@ -58,22 +58,43 @@
   (lambda (statement environment return break continue throw)
     (call/cc
      (lambda (return1)
-       (interpret-statement-list (cadr (lookup statement environment)) (push-frame environment) return1 break continue throw)))))
+       (interpret-statement-list (cadr (lookup statement environment)) (push-frame (create-environment environment (caddr (lookup statement environment))))
+                                 return1 break continue throw)))))
 
 ; adds the function definition to the environment
 (define interpret-function-declaration
   (lambda (statement environment)
     (insert (get-declare-var statement) (create-closure statement environment) environment)))
 
+(define layers-in
+  (lambda (environment)
+    (if (null? environment)
+        0
+        (+ 1 (layers-in (pop-frame environment))))))
+
 ; creates a closure for a function
 (define create-closure
   (lambda (statement environment)
-    (cons (operand2 statement) (cons (operand3 statement) (create-environment environment)))))
+    (cons (operand2 statement) (cons (operand3 statement) (cons (layers-in environment) '())))))
 
 ; creates the environment for a function
 (define create-environment
-  (lambda (environment)
-    environment))
+  (lambda (environment layers)
+    (if (zero? layers)
+        '()
+        (myappend (create-environment (remainingframes (myreverse environment)) (- layers 1)) (cons (topframe (myreverse environment)) '())))))
+
+(define myappend
+  (lambda (l1 l2)
+    (if (null? l1)
+        l2
+        (cons (car l1) (myappend (cdr l1) l2)))))
+
+(define myreverse
+  (lambda (lis)
+    (if (null? lis)
+        lis
+        (myappend (myreverse (cdr lis)) (cons (car lis) '())))))
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
