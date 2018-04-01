@@ -46,7 +46,7 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
-; creates the outer layer for a program
+; creates the outer layer for a program to hold global variables and function definitions
 (define create-outer-layer
   (lambda (stmt-list)
     (interpret-statement-list stmt-list (newenvironment)
@@ -60,6 +60,7 @@
      (lambda (return1)
        (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment)
                                  return1 break continue throw)))))
+
 ; get the formal parameters for a function
 (define get-formal-parameters
   (lambda (statement environment)
@@ -70,12 +71,17 @@
   (lambda (statement)
     (cddr statement)))
 
+; returns the environment for a function by doing the following in order:
+; 1. finds what's in scope by determining how many layers deep the scope is
+; 2. adds a layer to the scope
+; 3. binds the formal parameters to the actual parameters and adds the bindings to the scope
 (define get-function-environment
   (lambda (statement environment)
     (add-bindings (get-formal-parameters statement environment) (get-actual-parameters statement) 
                         (push-frame (create-environment environment (caddr (lookup (operand1 statement) environment)))) environment)))
 
-; get function environment when called
+; adds the bindings of the formal parameters to the actual parameters and adds them to the new environment
+; oldenvironment is used to evaluate expressions in the actual parameters
 (define add-bindings
   (lambda (formal actual newenvironment oldenvironment)
     (cond
@@ -102,11 +108,16 @@
         (+ 1 (layers-in (pop-frame environment))))))
 
 ; creates a closure for a function
+; 1st element: formal parameters
+; 2nd element: body of function
+; 3rd element: how many layers in the environment this function declaration is in (needed to find the function environment)
 (define create-closure
   (lambda (statement environment)
     (cons (operand2 statement) (cons (operand3 statement) (cons (layers-in environment) '())))))
 
-; creates the environment for a function
+; creates the environment for a function by returning the specified number of layers
+; ex: if the environment had 5 layers, it would be represented as ((FIFTH LAYER) (FOURTH) (THIRD) (SECOND) (FIRST))
+; this method with layers = 3, would return ((THIRD) (SECOND) (FIRST))
 (define create-environment
   (lambda (environment layers)
     (if (zero? layers)
