@@ -1,17 +1,27 @@
-function fact(n) {
-  var f = 1;
-  while (n > 1) {
-    f = f * n;
-    n = n - 1;
+function collatz(n) {
+  var counteven = 0;
+  var countodd = 0;
+
+  function evenstep(n) {
+    counteven = counteven + 1;
+    return n / 2;
   }
-  return f;
+
+  function oddstep(n) {
+    countodd = countodd + 1;
+    return 3 * n + 1;
+  }
+
+  while (n != 1) {
+    if (n % 2 == 0)
+      n = evenstep(n);
+    else
+      n = oddstep(n);
+  }
+  return counteven + countodd;
 }
 
-function binom(a, b) {
-  var val = fact(a) / (fact(b) * fact(a-b));
-  return val;
-}
 
 function main() {
-  return binom(6,3);
+  return collatz(111);
 }

@@ -58,28 +58,43 @@
   (lambda (statement environment return break continue throw)
     (call/cc
      (lambda (return1)
-       (interpret-statement-list (cadr (lookup (operand1 statement) environment))
-                                 (get-function-environment (get-formal-parameters (operand1 statement) environment) (cddr statement)
-                                                       (push-frame (create-environment environment (caddr (lookup (operand1 statement) environment)))))
+       (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment)
                                  return1 break continue throw)))))
 ; get the formal parameters for a function
 (define get-formal-parameters
-  (lambda (name environment)
-    (car (lookup name environment))))
+  (lambda (statement environment)
+    (car (lookup (operand1 statement) environment))))
+
+; get the actual parameters from a function call
+(define get-actual-parameters
+  (lambda (statement)
+    (cddr statement)))
+
+(define get-function-environment
+  (lambda (statement environment)
+    (add-bindings (get-formal-parameters statement environment) (get-actual-parameters statement) 
+                        (push-frame (create-environment environment (caddr (lookup (operand1 statement) environment)))) environment)))
 
 ; get function environment when called
-(define get-function-environment
-  (lambda (formal actual environment)
+(define add-bindings
+  (lambda (formal actual newenvironment oldenvironment)
     (cond
-      ((and (null? formal) (null? actual)) environment)
+      ((and (null? formal) (null? actual)) newenvironment)
       ((or (null? formal) (null? actual)) (myerror "Invalid function call"))
-      (else (get-function-environment (cdr formal) (cdr actual) (insert (car formal) (eval-expression (car actual) environment) environment))))))
+      (else (add-bindings (cdr formal) (cdr actual) (insert (car formal) (eval-expression (car actual) oldenvironment) newenvironment) oldenvironment)))))
 
 ; adds the function definition to the environment
 (define interpret-function-declaration
   (lambda (statement environment)
     (insert (get-declare-var statement) (create-closure statement environment) environment)))
 
+; returns the number of layers in a function is declared
+; function a() {
+;    function b() {
+;    }
+; }
+; function a is 1 layer in
+; function b is 2 layers in
 (define layers-in
   (lambda (environment)
     (if (null? environment)
