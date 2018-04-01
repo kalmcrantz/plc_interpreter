@@ -59,16 +59,21 @@
     (call/cc
      (lambda (return1)
        (interpret-statement-list (cadr (lookup (operand1 statement) environment))
-                                 (bind-parameters (car (lookup (operand1 statement) environment)) (cddr statement)
+                                 (get-function-environment (get-formal-parameters (operand1 statement) environment) (cddr statement)
                                                        (push-frame (create-environment environment (caddr (lookup (operand1 statement) environment)))))
                                  return1 break continue throw)))))
+; get the formal parameters for a function
+(define get-formal-parameters
+  (lambda (name environment)
+    (car (lookup name environment))))
 
-(define bind-parameters
+; get function environment when called
+(define get-function-environment
   (lambda (formal actual environment)
     (cond
       ((and (null? formal) (null? actual)) environment)
-      ((or (null? formal) (null? actual)) (myerror "Wrong number of parameters"))
-      (else (bind-parameters (cdr formal) (cdr actual) (insert (car formal) (car actual) environment))))))
+      ((or (null? formal) (null? actual)) (myerror "Invalid function call"))
+      (else (get-function-environment (cdr formal) (cdr actual) (insert (car formal) (eval-expression (car actual) environment) environment))))))
 
 ; adds the function definition to the environment
 (define interpret-function-declaration
