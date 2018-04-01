@@ -1,17 +1,12 @@
-var a = 10;
-var b = 20;
-
-function bmethod() {
-  var b = 30;
-  return a + b;
+function fib(a) {
+  if (a == 0)
+    return 0;
+  else if (a == 1)
+    return 1;
+  else 
+    return 12;
 }
 
-function cmethod() {
-  var a = 40;
-  return bmethod() + a + b;
-}
-
-function main () {
-  var b = 5;
-  return cmethod() + a + b;
+function main() {
+  return fib(1);
 }

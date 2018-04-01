@@ -17,7 +17,7 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-function 'main (create-outer-layer (parser file)) return
+        (interpret-function '(funcall main) (create-outer-layer (parser file)) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -58,8 +58,17 @@
   (lambda (statement environment return break continue throw)
     (call/cc
      (lambda (return1)
-       (interpret-statement-list (cadr (lookup statement environment)) (push-frame (create-environment environment (caddr (lookup statement environment))))
+       (interpret-statement-list (cadr (lookup (operand1 statement) environment))
+                                 (bind-parameters (car (lookup (operand1 statement) environment)) (cddr statement)
+                                                       (push-frame (create-environment environment (caddr (lookup (operand1 statement) environment)))))
                                  return1 break continue throw)))))
+
+(define bind-parameters
+  (lambda (formal actual environment)
+    (cond
+      ((and (null? formal) (null? actual)) environment)
+      ((or (null? formal) (null? actual)) (myerror "Wrong number of parameters"))
+      (else (bind-parameters (cdr formal) (cdr actual) (insert (car formal) (car actual) environment))))))
 
 ; adds the function definition to the environment
 (define interpret-function-declaration
@@ -214,7 +223,7 @@
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment)))
       ((eq? 'funcall (operator expr)) (call/cc
                                        (lambda (return)
-                                         (interpret-function (operand1 expr) environment return (lambda (v) (myerror "cannot break here"))
+                                         (interpret-function expr environment return (lambda (v) (myerror "cannot break here"))
                                                              (lambda (v) (myerror "cannot continue here")) (lambda (v) (myerror "cannot throw here"))))))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment)))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment) environment)))))
