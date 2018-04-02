@@ -5,3 +5,4 @@ compiled/drracket/errortrace/lex_scm.dep
 compiled/drracket/errortrace/lex_scm.zo
 *.dep
 test1.txt
+*.txt
