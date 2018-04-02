@@ -17,7 +17,7 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-function 'main (create-outer-layer (parser file)) return
+        (interpret-function '(funcall main) (create-outer-layer (parser file)) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -33,9 +33,7 @@
   (lambda (statement environment return break continue throw)
     (cond
       ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment))
-      ;((eq? 'funcall (statement-type statement)) (interpret-function statement environment return break continue throw))
-      ((eq? 'funcall (statement-type statement)) (interpret-function statement (get-function-environment (cddr statement) (get-formal-parameters (cadr statement) environment) (push-frame environment))
-                                                                      return break continue throw))                                                                                                                                    
+      ((eq? 'funcall (statement-type statement)) (interpret-function statement environment return break continue throw))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment))
@@ -48,7 +46,7 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
-; creates the outer layer for a program
+; creates the outer layer for a program to hold global variables and function definitions
 (define create-outer-layer
   (lambda (stmt-list)
     (interpret-statement-list stmt-list (newenvironment)
@@ -60,36 +58,84 @@
   (lambda (statement environment return break continue throw)
     (call/cc
      (lambda (return1)
-       (interpret-statement-list (cadr (lookup statement environment)) (push-frame environment) return1 break continue throw)))))
+       (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment)
+                                 return1 break continue throw)))))
+
+; get the formal parameters for a function
+(define get-formal-parameters
+  (lambda (statement environment)
+    (car (lookup (operand1 statement) environment))))
+
+; get the actual parameters from a function call
+(define get-actual-parameters
+  (lambda (statement)
+    (cddr statement)))
+
+; returns the environment for a function by doing the following in order:
+; 1. finds what's in scope by determining how many layers deep the scope is
+; 2. adds a layer to the scope
+; 3. binds the formal parameters to the actual parameters and adds the bindings to the scope
+(define get-function-environment
+  (lambda (statement environment)
+    (add-bindings (get-formal-parameters statement environment) (get-actual-parameters statement) 
+                        (push-frame (create-environment environment (caddr (lookup (operand1 statement) environment)))) environment)))
+
+; adds the bindings of the formal parameters to the actual parameters and adds them to the new environment
+; oldenvironment is used to evaluate expressions in the actual parameters
+(define add-bindings
+  (lambda (formal actual newenvironment oldenvironment)
+    (cond
+      ((and (null? formal) (null? actual)) newenvironment)
+      ((or (null? formal) (null? actual)) (myerror "Invalid function call"))
+      (else (add-bindings (cdr formal) (cdr actual) (insert (car formal) (eval-expression (car actual) oldenvironment) newenvironment) oldenvironment)))))
 
 ; adds the function definition to the environment
 (define interpret-function-declaration
   (lambda (statement environment)
     (insert (get-declare-var statement) (create-closure statement environment) environment)))
 
+; returns the number of layers in a function is declared
+; function a() {
+;    function b() {
+;    }
+; }
+; function a is 1 layer in
+; function b is 2 layers in
+(define layers-in
+  (lambda (environment)
+    (if (null? environment)
+        0
+        (+ 1 (layers-in (pop-frame environment))))))
+
 ; creates a closure for a function
+; 1st element: formal parameters
+; 2nd element: body of function
+; 3rd element: how many layers in the environment this function declaration is in (needed to find the function environment)
 (define create-closure
   (lambda (statement environment)
-    (cons (operand2 statement) (cons (operand3 statement) (create-environment environment)))))
+    (cons (operand2 statement) (cons (operand3 statement) (cons (layers-in environment) '())))))
 
-; creates the environment for a function
+; creates the environment for a function by returning the specified number of layers
+; ex: if the environment had 5 layers, it would be represented as ((FIFTH LAYER) (FOURTH) (THIRD) (SECOND) (FIRST))
+; this method with layers = 3, would return ((THIRD) (SECOND) (FIRST))
 (define create-environment
-  (lambda (environment)
-    environment))
+  (lambda (environment layers)
+    (if (zero? layers)
+        '()
+        (myappend (create-environment (remainingframes (myreverse environment)) (- layers 1)) (cons (topframe (myreverse environment)) '())))))
 
-; get formal parameters
-(define get-formal-parameters
-  (lambda (name environment)
-    (car (lookup name environment))))
+(define myappend
+  (lambda (l1 l2)
+    (if (null? l1)
+        l2
+        (cons (car l1) (myappend (cdr l1) l2)))))
 
-;get function environment when called
-(define get-function-environment
-  (lambda (actual formal environment)
-    (cond
-      ((not (eq? (length actual) (length formal))) (myerror "invalid function call"))
-      ((null? actual) (create-environment environment))
-      (else (get-function-environment (cdr actual) (cdr formal) (insert (car formal) (eval-expression (car actual) environment) environment) environment)))))
-    
+(define myreverse
+  (lambda (lis)
+    (if (null? lis)
+        lis
+        (myappend (myreverse (cdr lis)) (cons (car lis) '())))))
+
 ; Calls the return continuation with the given expression value
 (define interpret-return
   (lambda (statement environment return)
@@ -207,9 +253,9 @@
     (cond
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment)))
       ((eq? 'funcall (operator expr)) (call/cc
-                                      ; (lambda (return)
-                                       ;  (interpret-function (operand1 expr) environment return (lambda (v) (myerror "cannot break here"))
-                                        ;                     (lambda (v) (myerror "cannot continue here")) (lambda (v) (myerror "cannot throw here"))))))
+                                       (lambda (return)
+                                         (interpret-function expr environment return (lambda (v) (myerror "cannot break here"))
+                                                             (lambda (v) (myerror "cannot continue here")) (lambda (v) (myerror "cannot throw here"))))))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment)))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment) environment)))))
 
@@ -444,4 +490,3 @@
                             str
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
-
