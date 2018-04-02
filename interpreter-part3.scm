@@ -33,7 +33,7 @@
   (lambda (statement environment return break continue throw)
     (cond
       ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment))
-      ((eq? 'funcall (statement-type statement)) (interpret-function statement environment return break continue throw))
+      ((eq? 'funcall (statement-type statement)) (interpret-function-no-return statement environment return break continue throw))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment throw))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment throw))
@@ -56,10 +56,18 @@
 ; returns the value of a function
 (define interpret-function
   (lambda (statement environment return break continue throw)
-    (call/cc
+    (car (call/cc
      (lambda (return1)
        (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment throw)
-                                 return1 break continue throw)))))
+                                 return1 break continue throw))))))
+
+; returns the state of a function (needed if the function is called but want to ignore return)
+(define interpret-function-no-return
+  (lambda (statement environment return break continue throw)
+    (cdr (call/cc
+     (lambda (return1)
+       (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment throw)
+                                 return1 break continue throw))))))
 
 ; get the formal parameters for a function
 (define get-formal-parameters
@@ -92,7 +100,7 @@
 ; adds the function definition to the environment
 (define interpret-function-declaration
   (lambda (statement environment)
-    (insert (get-declare-var statement) (create-closure statement environment) environment)))
+    (insert-in-base-layer (get-declare-var statement) (create-closure statement environment) environment)))
 
 ; returns the number of layers in a function is declared
 ; function a() {
@@ -122,7 +130,7 @@
   (lambda (environment layers)
     (if (zero? layers)
         '()
-        (myappend (create-environment (remainingframes (myreverse environment)) (- layers 1)) (cons (topframe (myreverse environment)) '())))))
+        (myappend (create-environment (myreverse (remainingframes (myreverse environment))) (- layers 1)) (cons (topframe (myreverse environment)) '())))))
 
 (define myappend
   (lambda (l1 l2)
@@ -139,7 +147,7 @@
 ; Calls the return continuation with the given expression value
 (define interpret-return
   (lambda (statement environment return throw)
-    (return (eval-expression (get-expr statement) environment throw))))
+    (return (cons (eval-expression (get-expr statement) environment throw) environment))))
 
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
@@ -420,6 +428,13 @@
     (if (exists-in-list? var (variables (car environment)))
         (myerror "error: variable is being re-declared:" var)
         (cons (add-to-frame var val (car environment)) (cdr environment)))))
+
+(define insert-in-base-layer
+  (lambda (var val environment)
+    (cond
+      ((and (null? (remainingframes environment)) (exists-in-list? var (variables (car environment)))) (myerror "error: variable is being re-declared:" var))
+      ((null? (remainingframes environment)) (cons (add-to-frame var val (car environment)) (cdr environment)))
+      (else (cons (topframe environment) (insert-in-base-layer var val (remainingframes environment)))))))
 
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
 (define update
