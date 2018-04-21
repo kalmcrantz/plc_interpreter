@@ -1,15 +1,12 @@
 function divide(x, y) {
-  if (y == 0)
-    throw y;
-  return x / y;
+  throw y;
 }
 
 function main() {
   var x;
 
   try {
-    x = divide(10, 5) * 10;
-    x = x + divide(5, 0);
+    divide(1, 2);
   }
   catch(e) {
     x = e;
