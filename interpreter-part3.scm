@@ -21,10 +21,6 @@
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
-
-
-
-
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
   (lambda (statement-list environment return break continue throw)
@@ -51,22 +47,28 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
+;returns the state after a class is declared
 (define interpret-class-declaration
   (lambda (statement environment)
     (insert-in-base-layer (get-declare-var statement) (create-class-closure statement environment) environment)))
 
+;creates a class closure
+;looks like: '((parent class) (instance fields of class) ((function names of class) (function closures))
 (define create-class-closure
   (lambda (statement environment)
     (cons (get-parent statement) (cons (create-instance-fields statement) (create-function-list statement)))))
 
+;gets the parent of a class
 (define get-parent
   (lambda (statement)
     (operand2 statement)))
 
+;gets the list of instance fields of a class
 (define create-instance-fields
   (lambda (statement)
     (create-fields-from-frame (topframe (interpret-statement-list (get-class-body statement) (newenvironment) 'a 'b 'c 'd)))))
 
+;helper for above method
 (define create-fields-from-frame
   (lambda (frame)
     (cond
@@ -74,17 +76,21 @@
       ((list? (lookup-in-frame (car (variables frame)) frame)) (create-fields-from-frame (remove-top-binding frame)))
       (else (cons (car (variables frame)) (create-fields-from-frame (remove-top-binding frame)))))))
 
+;removes the first binding in a frame
+; Ex: ((a b) (1 2)) --> ((b) (2))
 (define remove-top-binding
   (lambda (frame)
     (if (null? (variables frame))
         frame
         (list (cdr (variables frame)) (cdr (store frame))))))
-    
+
+;returns a list of functions and their closures in the form ((function names) (function closures) 
 (define create-function-list
   (lambda (statement)
     (create-functions-from-frame (topframe (interpret-statement-list (get-class-body statement) (newenvironment) 'a 'b 'c 'd))
                               (lambda (a b) (cons (list a b) '())))))
 
+;helper for above function
 (define create-functions-from-frame
   (lambda (frame return)
     (cond
@@ -93,11 +99,10 @@
        (create-functions-from-frame (remove-top-binding frame) (lambda (a b) (return (cons (car (variables frame)) a) (cons (car (store frame)) b)))))
       (else (create-functions-from-frame (remove-top-binding frame) return)))))
 
-
+;returns the class body of a class declaration statement
 (define get-class-body
   (lambda (statement)
     (operand3 statement)))
-    
 
 ; creates the class layer for a program to hold class definitions
 (define create-class-layer
@@ -121,6 +126,8 @@
      (lambda (return1)
        (interpret-statement-list (get-function-body-from-class-closure statement class environment) (get-function-environment statement class environment throw)
                                  return1 break continue throw))))))
+
+
 (define get-function-body-from-class-closure
   (lambda (statement class environment)
     (cadr (lookup-in-frame (operand1 statement) (get-function-list-from-class class environment)))))
