@@ -13,13 +13,17 @@
 
 ; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
 (define interpret
-  (lambda (file)
+  (lambda (file class)
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-function '(funcall main) (create-outer-layer (parser file)) return
+        (interpret-function '(funcall main) (create-class-layer (parser file)) class return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+
+
+
+
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -33,6 +37,7 @@
   (lambda (statement environment return break continue throw)
     (cond
       ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment))
+      ((eq? 'class (statement-type statement)) (interpret-class-declaration statement environment))
       ((eq? 'funcall (statement-type statement)) (interpret-function-no-return statement environment return break continue throw))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment throw))
@@ -46,8 +51,56 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
-; creates the outer layer for a program to hold global variables and function definitions
-(define create-outer-layer
+(define interpret-class-declaration
+  (lambda (statement environment)
+    (insert-in-base-layer (get-declare-var statement) (create-class-closure statement environment) environment)))
+
+(define create-class-closure
+  (lambda (statement environment)
+    (cons (get-parent statement) (cons (create-instance-fields statement) (create-function-list statement)))))
+
+(define get-parent
+  (lambda (statement)
+    (operand2 statement)))
+
+(define create-instance-fields
+  (lambda (statement)
+    (create-fields-from-frame (topframe (interpret-statement-list (get-class-body statement) (newenvironment) 'a 'b 'c 'd)))))
+
+(define create-fields-from-frame
+  (lambda (frame)
+    (cond
+      ((null? (store frame)) '())
+      ((list? (lookup-in-frame (car (variables frame)) frame)) (create-fields-from-frame (remove-top-binding frame)))
+      (else (cons (car (variables frame)) (create-fields-from-frame (remove-top-binding frame)))))))
+
+(define remove-top-binding
+  (lambda (frame)
+    (if (null? (variables frame))
+        frame
+        (list (cdr (variables frame)) (cdr (store frame))))))
+    
+(define create-function-list
+  (lambda (statement)
+    (create-functions-from-frame (topframe (interpret-statement-list (get-class-body statement) (newenvironment) 'a 'b 'c 'd))
+                              (lambda (a b) (cons (list a b) '())))))
+
+(define create-functions-from-frame
+  (lambda (frame return)
+    (cond
+      ((null? (store frame)) (return '() '()))
+      ((list? (lookup-in-frame (car (variables frame)) frame))
+       (create-functions-from-frame (remove-top-binding frame) (lambda (a b) (return (cons (car (variables frame)) a) (cons (car (store frame)) b)))))
+      (else (create-functions-from-frame (remove-top-binding frame) return)))))
+
+
+(define get-class-body
+  (lambda (statement)
+    (operand3 statement)))
+    
+
+; creates the class layer for a program to hold class definitions
+(define create-class-layer
   (lambda (stmt-list)
     (interpret-statement-list stmt-list (newenvironment)
                               (lambda (env) (myerror "Return used outside of method")) (lambda (env) (myerror "Break used outside of loop"))
@@ -55,19 +108,30 @@
 
 ; returns the value of a function
 (define interpret-function
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment class return break continue throw)
     (car (call/cc
      (lambda (return1)
-       (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment throw)
+       (interpret-statement-list (cadr (lookup-in-frame (operand1 statement) (caddr (lookup class environment)))) (get-function-environment statement class environment throw)
                                  return1 break continue throw))))))
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
-  (lambda (statement environment return break continue throw)
+  (lambda (statement class environment return break continue throw)
     (cdr (call/cc
      (lambda (return1)
-       (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment throw)
+       (interpret-statement-list (get-function-body-from-class-closure statement class environment) (get-function-environment statement class environment throw)
                                  return1 break continue throw))))))
+(define get-function-body-from-class-closure
+  (lambda (statement class environment)
+    (cadr (lookup-in-frame (operand1 statement) (get-function-list-from-class class environment)))))
+
+(define get-function-parameters-from-class-closure
+  (lambda (statement class environment)
+    (car (lookup-in-frame (operand1 statement) (get-function-list-from-class class environment)))))
+
+(define get-function-list-from-class
+  (lambda (class environment)
+    (caddr (lookup class environment))))
 
 ; get the formal parameters for a function
 (define get-formal-parameters
@@ -84,9 +148,13 @@
 ; 2. adds a layer to the scope
 ; 3. binds the formal parameters to the actual parameters and adds the bindings to the scope
 (define get-function-environment
-  (lambda (statement environment throw)
-    (add-bindings (get-formal-parameters statement environment) (get-actual-parameters statement) 
-                        (push-frame (create-environment environment (caddr (lookup (operand1 statement) environment)))) environment throw)))
+  (lambda (statement class environment throw)
+    (add-bindings (get-function-parameters-from-class-closure statement class environment) (get-actual-parameters statement) 
+                        (push-frame (create-environment environment (get-function-layer-num-from-class-closure statement class environment))) environment throw)))
+
+(define get-function-layer-num-from-class-closure
+  (lambda (statement class environment)
+    (caddr (lookup-in-frame (operand1 statement) (get-function-list-from-class class environment)))))
 
 ; adds the bindings of the formal parameters to the actual parameters and adds them to the new environment
 ; oldenvironment is used to evaluate expressions in the actual parameters
@@ -98,9 +166,10 @@
       (else (add-bindings (cdr formal) (cdr actual) (insert (car formal) (eval-expression (car actual) oldenvironment throw) newenvironment) oldenvironment throw)))))
 
 ; adds the function definition to the environment
+; TODO: This will need to be changed so that its inserted in the class and not the base layer
 (define interpret-function-declaration
   (lambda (statement environment)
-    (insert-in-base-layer (get-declare-var statement) (create-closure statement environment) environment)))
+    (insert-in-base-layer (get-declare-var statement) (create-function-closure statement environment) environment)))
 
 ; returns the number of layers in a function is declared
 ; function a() {
@@ -119,7 +188,7 @@
 ; 1st element: formal parameters
 ; 2nd element: body of function
 ; 3rd element: how many layers in the environment this function declaration is in (needed to find the function environment)
-(define create-closure
+(define create-function-closure
   (lambda (statement environment)
     (cons (operand2 statement) (cons (operand3 statement) (cons (layers-in environment) '())))))
 

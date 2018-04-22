@@ -1,18 +1,11 @@
-function divide(x, y) {
-  throw y;
-}
+class A {
+  var x = 5;
+  var y = 10;
 
-function main() {
-  var x;
-
-  try {
-    divide(1, 2);
+  function main() {
+    return 20;
   }
-  catch(e) {
-    x = e;
+  function hello() {
+    return 1;
   }
-  finally {
-    x = x + 100;
-  }
-  return x;
 }
