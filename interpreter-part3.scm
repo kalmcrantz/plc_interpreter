@@ -32,6 +32,7 @@
 (define interpret-statement
   (lambda (statement environment return break continue throw)
     (cond
+      ((eq? 'new (statement-type statement)) (interpret-instance-declaration statement environment))
       ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment))
       ((eq? 'class (statement-type statement)) (interpret-class-declaration statement environment))
       ((eq? 'funcall (statement-type statement)) (interpret-function-no-return statement environment return break continue throw))
@@ -46,6 +47,11 @@
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
+
+;creates a new instance of a class
+(define interpret-instance-declaration
+  (lambda (className environment)
+    (cons className (cons (cadr (caddr (lookup className environment))) '()))))
 
 ;returns the state after a class is declared
 (define interpret-class-declaration
@@ -335,6 +341,7 @@
 (define eval-operator
   (lambda (expr environment throw)
     (cond
+      ((eq? 'new (statement-type expr)) (interpret-instance-declaration (cadr expr) environment))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment throw)))
       ((eq? 'funcall (operator expr)) (call/cc
                                        (lambda (return)
