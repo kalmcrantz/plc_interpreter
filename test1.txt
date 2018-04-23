@@ -2,7 +2,7 @@ class A {
   var x = 5;
   var y = 10;
 
-  function main() {
+  static function main() {
     return 20;
   }
   function hello() {
