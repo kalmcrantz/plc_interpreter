@@ -33,6 +33,7 @@
   (lambda (statement environment return break continue throw)
     (cond
       ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment))
+      ((eq? 'static-function (statement-type statement)) (interpret-function-declaration statement environment))
       ((eq? 'class (statement-type statement)) (interpret-class-declaration statement environment))
       ((eq? 'funcall (statement-type statement)) (interpret-function-no-return statement environment return break continue throw))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return throw))
