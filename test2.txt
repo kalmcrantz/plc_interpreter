@@ -1,5 +1,5 @@
 class B {
-  function main() {
+  static function main() {
     var b = new B();
     return b;
   }
