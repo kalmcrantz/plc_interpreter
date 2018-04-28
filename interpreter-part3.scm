@@ -84,6 +84,30 @@
       ((list? (lookup-in-frame (car (variables frame)) frame)) (create-fields-from-frame (remove-top-binding frame)))
       (else (cons (car (variables frame)) (create-fields-from-frame (remove-top-binding frame)))))))
 
+;gets the instance of the left hand side of a dot operator
+(define getInstance
+  (lambda (statement environment class this)
+    (cond
+      ((eq? 'new (operator statement)) (statement statement))
+      (else statement))))
+
+;haha I have no idea what im doing but maybe this one works
+(define getInstance2
+  (lambda (statement environment class this)
+    (cond
+      ((eq? (operator statement) 'funcall) (dotFunc statement environment class this))
+      (else (lookup statement environment this)))))
+
+(define dotFunc
+  (lambda (statement environment class this)
+    (cond
+      ((eq? (operator (operand1 statement)) 'new) (lookup (operand2 statement) (car (caddr (lookup (cadadr statement) environment this)))
+                                                          (cadr interpret-instance-declaration (getInstance2 statement environment class this))))
+      ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (car (caddr (lookup (car this) environment this))) (cadr this)))
+      (else (lookup (operand2 statement) (car (caddr (lookup (car (lookup (operand1 statement) environment this)) environment this)))
+                    (cadr (lookup (operand1 statement) environment this)))))))
+    
+
 ;removes the first binding in a frame
 ; Ex: ((a b) (1 2)) --> ((b) (2))
 (define remove-top-binding
@@ -348,6 +372,7 @@
 (define eval-operator
   (lambda (expr environment class this throw)
     (cond
+      ((eq? 'dot (operator expr)) (dotFunc expr environment class this))
       ((eq? 'new (statement-type expr)) (interpret-instance-declaration (cadr expr) environment class this))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment class this throw)))
       ((eq? 'funcall (operator expr)) (call/cc
