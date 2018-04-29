@@ -53,7 +53,37 @@
   (lambda (instance environment)
     (car (lookup-variable instance environment))))
 
+(define interpret-dot-variable
+  (lambda (statement environment class this)
+    (unbox (retrieve-index (get-variable-index (operand2 statement) (get-class-from-instance (operand1 statement) environment) environment this)
+                                        (get-variable-values-from-closure (get-instance-closure (operand1 statement) environment))))))
 
+(define retrieve-index
+  (lambda (index lis)
+    (cond
+      ((zero? index) (car lis))
+      ((null? lis) (raise "Retrive index error"))
+      (else (retrieve-index (- index 1) (cdr lis))))))
+
+(define get-variable-index
+  (lambda (variable class environment this)
+    (find-index-in-list variable (car (cadr (lookup class environment class this))))))
+
+(define find-index-in-list
+  (lambda (variable lis)
+    (cond
+      ((null? lis) (raise "Variable not in list"))
+      ((eq? (car lis) variable) 0)
+      (else (+ 1 (find-index-in-list variable (cdr lis)))))))
+
+(define get-instance-closure
+  (lambda (instance environment)
+    (lookup-variable instance environment)))
+
+(define get-variable-values-from-closure
+  (lambda (closure)
+    (cadr closure)))
+    
 ;creates a new instance of a class
 (define interpret-instance-declaration
   (lambda (className environment class this)
@@ -126,7 +156,6 @@
       ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (car (caddr (lookup (car this) environment this))) (cadr this)))
       (else (lookup (operand2 statement) (car (caddr (lookup (car (lookup (operand1 statement) environment this)) environment this)))
                     (cadr (lookup (operand1 statement) environment this)))))))
-    
 
 ;removes the first binding in a frame
 ; Ex: ((a b) (1 2)) --> ((b) (2))
@@ -409,8 +438,8 @@
 (define eval-operator
   (lambda (expr environment class this throw)
     (cond
-      ((eq? 'dot (operator expr)) (dotFunc expr environment class this))
       ((eq? 'new (statement-type expr)) (interpret-instance-declaration (cadr expr) environment class this))
+      ((eq? 'dot (statement-type expr)) (interpret-dot-variable expr environment class this))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment class this throw)))
       ((eq? 'funcall (operator expr)) (call/cc
                                        (lambda (return)
