@@ -1,11 +1,6 @@
-class A {
-  var x = 5;
-  var y = 10;
-
+class B {
   static function main() {
-    return 20;
-  }
-  function hello() {
-    return 1;
+    var b = new B();
+    return b;
   }
 }

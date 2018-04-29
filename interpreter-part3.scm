@@ -49,11 +49,20 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment class this return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
+(define get-class-from-instance
+  (lambda (instance environment)
+    (car (lookup-variable instance environment))))
+
 
 ;creates a new instance of a class
 (define interpret-instance-declaration
   (lambda (className environment class this)
-    (cons className (cons (cadr (caddr (lookup className environment class this))) '()))))
+    (create-instance-closure className environment class this)))
+
+;
+(define create-instance-closure
+  (lambda (className environment class this)
+    (cons className (cdr (cadr (lookup className environment class this))))))
 
 ;returns the state after a class is declared
 (define interpret-class-declaration
@@ -76,13 +85,24 @@
   (lambda (statement class this)
     (create-fields-from-frame (topframe (interpret-statement-list (get-class-body statement) (newenvironment) class this 'a 'b 'c 'd)))))
 
-;helper for above method
 (define create-fields-from-frame
+  (lambda (frame)
+    (list (create-field-variables-from-frame frame) (create-field-values-from-frame frame))))
+
+;helper for above method
+(define create-field-variables-from-frame
   (lambda (frame)
     (cond
       ((null? (store frame)) '())
-      ((list? (lookup-in-frame (car (variables frame)) frame)) (create-fields-from-frame (remove-top-binding frame)))
-      (else (cons (car (variables frame)) (create-fields-from-frame (remove-top-binding frame)))))))
+      ((list? (lookup-in-frame (car (variables frame)) frame)) (create-field-variables-from-frame (remove-top-binding frame)))
+      (else (cons (car (variables frame)) (create-field-variables-from-frame (remove-top-binding frame)))))))
+
+(define create-field-values-from-frame
+  (lambda (frame)
+    (cond
+      ((null? (store frame)) '())
+      ((list? (lookup-in-frame (car (variables frame)) frame)) (create-field-values-from-frame (remove-top-binding frame)))
+      (else (cons (car (store frame)) (create-field-values-from-frame (remove-top-binding frame)))))))
 
 ;removes the first binding in a frame
 ; Ex: ((a b) (1 2)) --> ((b) (2))
@@ -125,21 +145,29 @@
   (lambda (statement environment class this return break continue throw)
     (car (call/cc
      (lambda (return1)
-       (interpret-statement-list (cadr (lookup-in-frame (operand1 statement) (caddr (lookup class environment class this)))) (get-function-environment statement class this environment throw)
-                                 class this return1 break continue throw))))))
+       (if (list? (operand1 statement))
+           (interpret-function-dot (operand1 statement) environment class this return1 break continue throw)
+           (interpret-statement-list (cadr (lookup-in-frame (operand1 statement) (caddr (lookup class environment class this))))
+                                 (get-function-environment statement class this environment throw)
+                                 class this return1 break continue throw)))))))
+
+(define interpret-function-dot
+  (lambda (statement environment class this return break continue throw)
+    (interpret-statement-list (get-function-body-from-class (operand2 statement) (get-class-from-instance (operand1 statement) environment)
+                                                            this environment) environment class this return break continue throw)))
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
   (lambda (statement class this environment return break continue throw)
     (cdr (call/cc
      (lambda (return1)
-       (interpret-statement-list (get-function-body-from-class-closure statement class this environment) (get-function-environment statement class this environment throw)
+       (interpret-statement-list (get-function-body-from-class (operand1 statement) class this environment) (get-function-environment statement class this environment throw)
                                  class this return1 break continue throw))))))
 
 
-(define get-function-body-from-class-closure
-  (lambda (statement class this environment)
-    (cadr (lookup-in-frame (operand1 statement) (get-function-list-from-class class this environment)))))
+(define get-function-body-from-class
+  (lambda (function class this environment)
+    (cadr (lookup-in-frame function (get-function-list-from-class class this environment)))))
 
 (define get-function-parameters-from-class-closure
   (lambda (statement class this environment)
@@ -148,6 +176,10 @@
 (define get-function-list-from-class
   (lambda (class this environment)
     (caddr (lookup class environment class this))))
+
+(define get-function-names-from-class
+  (lambda (class this environment)
+    (car (get-function-list-from-class class this environment))))
 
 ; get the formal parameters for a function
 (define get-formal-parameters
@@ -165,9 +197,14 @@
 ; 3. binds the formal parameters to the actual parameters and adds the bindings to the scope
 (define get-function-environment
   (lambda (statement class this environment throw)
-    (add-bindings (get-function-parameters-from-class-closure statement class this environment) (get-actual-parameters statement) 
-                        (push-frame (create-environment environment (get-function-layer-num-from-class-closure statement class this environment))) environment class this throw)))
+    (add-bindings (get-function-parameters-from-class-closure statement class this environment) (get-actual-parameters statement)
+                  (add-functions-from-class-to-env class class this
+                        (create-environment environment (get-function-layer-num-from-class-closure statement class this environment))) environment class this throw)))
 
+(define add-functions-from-class-to-env
+  (lambda (className class this environment)
+    (cons (get-function-list-from-class className this environment) environment)))
+  
 (define get-function-layer-num-from-class-closure
   (lambda (statement class this environment)
     (caddr (lookup-in-frame (operand1 statement) (get-function-list-from-class class this environment)))))
