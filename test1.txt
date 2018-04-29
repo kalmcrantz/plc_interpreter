@@ -1,11 +1,13 @@
 class A {
 
-  function add(g, h) {
-    return g + h;
+  var x = 100;
+
+  function add(x) {
+    return this.x + x;
   }
 
   static function main() {
     var a = new A();
-    return a.add(10, 2);
+    return a.add(25);
   }
 }

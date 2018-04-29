@@ -194,20 +194,23 @@
                               (lambda (env) (myerror "Continue used outside of loop")) (lambda (v env) (myerror "Uncaught exception thrown")))))
 
 ; returns the value of a function
+; statement: (funcall function_name parameters)
 (define interpret-function
   (lambda (statement environment class this return break continue throw)
     (car (call/cc
      (lambda (return1)
        (if (list? (operand1 statement))
-           (interpret-function-dot (operand1 statement) environment class this return1 break continue throw)
+           (interpret-function-dot statement environment (get-class-from-instance (operand1 (operand1 statement)) environment) this return1 break continue throw)
            (interpret-statement-list (cadr (lookup-in-frame (operand1 statement) (caddr (lookup class environment class this))))
                                  (get-function-environment statement class this environment throw)
                                  class this return1 break continue throw)))))))
 
+;statement: (funcall (dot instance_name function_name) parameters)
 (define interpret-function-dot
   (lambda (statement environment class this return break continue throw)
-    (interpret-statement-list (get-function-body-from-class (operand2 statement) (get-class-from-instance (operand1 statement) environment)
-                                                            this environment) environment class this return break continue throw)))
+    (interpret-statement-list (get-function-body-from-class (caddr (cadr statement)) class this environment)
+                              (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
+                              class this return break continue throw)))
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
