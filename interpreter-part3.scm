@@ -55,8 +55,13 @@
 
 (define interpret-dot-variable
   (lambda (statement environment class this)
-    (unbox (retrieve-index (get-variable-index (operand2 statement) (get-class-from-instance (operand1 statement) environment) environment this)
-                                        (get-variable-values-from-closure (get-instance-closure (operand1 statement) environment))))))
+    (cond
+      ((eq? 'this (cadr statement)) (raise "You called this on a variable"))
+      ((eq? 'super (cadr statement)) (raise "You called super on a variable"))
+      ((list? (cadr statement)) (raise "You called new on a variable"))
+      (else (unbox (retrieve-index (get-variable-index (operand2 statement) (get-class-from-instance (operand1 statement) environment) environment this)
+                                        (get-variable-values-from-closure (get-instance-closure (operand1 statement) environment))))))))
+
 
 (define retrieve-index
   (lambda (index lis)
@@ -200,7 +205,7 @@
     (car (call/cc
      (lambda (return1)
        (if (list? (operand1 statement))
-           (interpret-function-dot statement environment (get-class-from-instance (operand1 (operand1 statement)) environment) this return1 break continue throw)
+           (interpret-function-dot statement environment class this return1 break continue throw)
            (interpret-statement-list (cadr (lookup-in-frame (operand1 statement) (caddr (lookup class environment class this))))
                                  (get-function-environment statement class this environment throw)
                                  class this return1 break continue throw)))))))
@@ -220,9 +225,14 @@
        (interpret-statement-list (get-function-body-from-class (operand1 statement) class this environment) (get-function-environment statement class this environment throw)
                                  class this return1 break continue throw))))))
 
+;statement: (funcall (dot a/super/this/new f) 3 5) = a.f(3, 5)
 (define get-function-body-from-call
   (lambda (statement class this environment)
-    (get-function-body-from-class (caddr (cadr statement)) class this environment)))
+    (cond
+      ((eq? 'this (cadr (cadr statement))) (raise "You called this on a function"))
+      ((eq? 'super (cadr (cadr statement))) (raise "You called super on a function"))
+      ((list? (cadr (cadr statement))) (raise "You called new on a function"))
+      (else (get-function-body-from-class (caddr (cadr statement)) class this environment)))))
 
 
 (define get-function-body-from-class
