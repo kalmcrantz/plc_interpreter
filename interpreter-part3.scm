@@ -51,7 +51,7 @@
 
 (define get-class-from-instance
   (lambda (instance environment)
-    (car (lookup-variable instance environment))))
+      (car (lookup-variable instance environment))))
 
 (define interpret-dot-variable
   (lambda (statement environment class this)
@@ -208,7 +208,7 @@
 ;statement: (funcall (dot instance_name function_name) parameters)
 (define interpret-function-dot
   (lambda (statement environment class this return break continue throw)
-    (interpret-statement-list (get-function-body-from-class (caddr (cadr statement)) class this environment)
+    (interpret-statement-list (get-function-body-from-call statement class this environment)
                               (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
                               class this return break continue throw)))
 
@@ -219,6 +219,10 @@
      (lambda (return1)
        (interpret-statement-list (get-function-body-from-class (operand1 statement) class this environment) (get-function-environment statement class this environment throw)
                                  class this return1 break continue throw))))))
+
+(define get-function-body-from-call
+  (lambda (statement class this environment)
+    (get-function-body-from-class (caddr (cadr statement)) class this environment)))
 
 
 (define get-function-body-from-class
