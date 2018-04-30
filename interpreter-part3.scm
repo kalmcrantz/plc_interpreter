@@ -50,8 +50,10 @@
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 (define get-class-from-instance
-  (lambda (instance environment)
-      (car (lookup-variable instance environment))))
+  (lambda (instance environment this)
+    (cond
+      ((eq? 'this instance) (get-class-from-instance this environment this))
+      (else (car (lookup-variable instance environment))))))
 
 (define interpret-dot-variable
   (lambda (statement environment class this)
@@ -63,8 +65,8 @@
 
 (define get-variable-value-from-instance
   (lambda (instance variable environment this)
-    (unbox (retrieve-index (get-variable-index variable (get-class-from-instance instance environment) environment this)
-                           (get-variable-values-from-closure (get-instance-closure instance environment))))))
+    (unbox (retrieve-index (get-variable-index variable (get-class-from-instance instance environment this) environment this)
+                           (get-variable-values-from-closure (get-instance-closure instance environment this))))))
 
 (define retrieve-index
   (lambda (index lis)
@@ -85,8 +87,10 @@
       (else (+ 1 (find-index-in-list variable (cdr lis)))))))
 
 (define get-instance-closure
-  (lambda (instance environment)
-    (lookup-variable instance environment)))
+  (lambda (instance environment this)
+    (cond
+      ((eq? 'this instance) (lookup-variable this environment))
+      (else (lookup-variable instance environment)))))
 
 (define get-variable-values-from-closure
   (lambda (closure)
@@ -222,11 +226,13 @@
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
-  (lambda (statement class this environment return break continue throw)
+  (lambda (statement environment class this return break continue throw)
     (cdr (call/cc
      (lambda (return1)
-       (interpret-statement-list (get-function-body-from-class (operand1 statement) class this environment) (get-function-environment statement class this environment throw)
-                                 class this return1 break continue throw))))))
+       (if (list? (operand1 statement))
+           (interpret-function-dot statement environment class this return1 break continue throw)
+           (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment throw)
+                                 return1 break continue throw)))))))
 
 ;statement: (funcall (dot a/super/this/new f) 3 5) = a.f(3, 5)
 (define get-function-body-from-call
@@ -253,6 +259,14 @@
 (define get-function-names-from-class
   (lambda (class this environment)
     (car (get-function-list-from-class class this environment))))
+
+(define get-class-closure-from-class
+  (lambda (class environment)
+    (lookup-variable class environment)))
+
+(define get-variables-in-class
+  (lambda (class environment)
+    (car (cadr (get-class-closure-from-class class environment)))))
 
 ; get the formal parameters for a function
 (define get-formal-parameters
@@ -355,7 +369,7 @@
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
   (lambda (statement environment class this throw)
-    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment class this throw) environment)))
+    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment class this throw) environment this)))
 
 ; We need to check if there is an else condition.  Otherwise, we evaluate the expression and do the right thing.
 (define interpret-if
@@ -621,7 +635,8 @@
 (define get-value
   (lambda (n l)
     (cond
-      ((zero? n) (unbox (car l)))
+      ((and (zero? n) (box? (car l))) (unbox (car l)))
+      ((zero? n) (car l))
       (else (get-value (- n 1) (cdr l))))))
 
 ; Adds a new variable/value binding pair into the environment.  Gives an error if the variable already exists in this frame.
@@ -640,11 +655,53 @@
 
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
 (define update
-  (lambda (var val environment)
-    (if (exists? var environment)
-        (update-existing var val environment)
-        (myerror "error: variable used but not defined:" var))))
+  (lambda (var val environment this)
+    (cond
+      ((list? var) (update-instance-field var val environment this))
+      ((exists? var environment) (update-existing var val environment))
+      (else (myerror "error: variable used but not defined:" var)))))
 
+;var: (dot instance variable)
+(define update-instance-field
+  (lambda (var val environment this)
+    (if (exists-in-list? (caddr var) (get-variables-in-class (get-class-from-instance (cadr var) environment this) environment))
+        (update-instance-field-for-real (cadr var) (caddr var) val environment this)
+        (myerror "error: variable not defined: " var))))
+
+(define update-instance-field-for-real
+  (lambda (instance variable value environment this)
+    (cond
+      ((null? environment) (myerror "instance does not exist: " instance))
+      ((eq? 'this instance) (update-instance-field-for-real this variable value environment this))
+      ((exists-in-list? instance (variables (car environment))) (cons (update-instance-field-in-frame instance value (topframe environment)
+                                              (get-variable-index variable (get-class-from-instance instance environment this) environment instance)) (remainingframes environment)))
+      (else (cons (topframe environment) (update-instance-field-for-real instance variable value (remainingframes environment) this))))))
+
+(define update-instance-field-in-frame
+  (lambda (instance value frame variable-index)
+    (list (variables frame) (update-instance-field-in-frame-store instance value (variables frame) (store frame) variable-index))))
+
+; needs to return the vallist, so a list of instance closures
+; ((A ()) (B (1 2)) (C (4 5)))
+(define update-instance-field-in-frame-store
+  (lambda (instance value varlist vallist index)
+    (cond
+      ((eq? instance (car varlist)) (cons (update-field-in-closure instance value (unbox (car vallist)) index) (cdr vallist)))
+      ((null? varlist) (myerror "variable not declared:" instance))
+      (else (cons (car vallist) (update-instance-field-in-frame-store instance value (cdr varlist) (cdr vallist) index))))))
+
+; needs to return the instance closure with the updated field
+; looks like: (A (1 2))
+(define update-field-in-closure
+  (lambda (instance value closure index)
+    (box (list (car closure) (update-field-in-value-list instance value (cadr closure) index)))))
+
+; needs to return the value-list updated
+(define update-field-in-value-list
+  (lambda (instance value value-list index)
+    (cond
+      ((zero? index) (begin (set-box! (car value-list) value) value-list))
+      (else (cons (car value-list) (update-field-in-value-list instance value (cdr value-list) (- 1 index)))))))
 ; Add a new variable/value pair to the frame.
 (define add-to-frame
   (lambda (var val frame)
@@ -656,7 +713,6 @@
     (if (exists-in-list? var (variables (car environment)))
         (cons (update-in-frame var val (topframe environment)) (remainingframes environment))
         (cons (topframe environment) (update-existing var val (remainingframes environment))))))
-
 ; Changes the binding of a variable in the frame to a new value.
 (define update-in-frame
   (lambda (var val frame)
@@ -666,7 +722,7 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (begin (set-box! (car vallist) val) vallist))
+      ((eq? var (car varlist)) (cons (box val) (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
 ; Returns the list of variables from a frame
