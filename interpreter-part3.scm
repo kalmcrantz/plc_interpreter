@@ -32,7 +32,6 @@
 (define interpret-statement
   (lambda (statement environment class this return break continue throw)
     (cond
-      ((eq? 'new (statement-type statement)) (interpret-instance-declaration statement environment class this))
       ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment class this))
       ((eq? 'static-function (statement-type statement)) (interpret-function-declaration statement environment class this))
       ((eq? 'class (statement-type statement)) (interpret-class-declaration statement environment class this))
@@ -159,8 +158,7 @@
 (define dotFunc
   (lambda (statement environment class this)
     (cond
-      ((eq? (operator (operand1 statement)) 'new) (lookup (operand2 statement) (car (caddr (lookup (cadadr statement) environment this)))
-                                                          (cadr interpret-instance-declaration (getInstance2 statement environment class this))))
+      ((eq? (operator (operand1 statement)) 'new) ((cadr interpret-instance-declaration (cadddr statement))))
       ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (car (caddr (lookup (car this) environment this))) (cadr this)))
       (else (lookup (operand2 statement) (car (caddr (lookup (car (lookup (operand1 statement) environment this)) environment this)))
                     (cadr (lookup (operand1 statement) environment this)))))))
@@ -216,25 +214,30 @@
 ;statement: (funcall (dot instance_name function_name) parameters)
 (define interpret-function-dot
   (lambda (statement environment class this return break continue throw)
-    (interpret-statement-list (get-function-body-from-call statement class this environment)
+    (cond
+      ((list? (cadr (cadr statement)))
+       (interpret-statement-list (get-function-body-from-call statement class this environment)
                               (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
-                              class (cadr (cadr statement)) return break continue throw)))
+                              class (cadr (cadr (cadr statement))) return break continue throw))
+      (else (interpret-statement-list (get-function-body-from-call statement class this environment)
+                              (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
+                              class (cadr (cadr statement)) return break continue throw)))))
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
   (lambda (statement class this environment return break continue throw)
     (cdr (call/cc
      (lambda (return1)
-       (interpret-statement-list (get-function-body-from-class (operand1 statement) class this environment) (get-function-environment statement class this environment throw)
+       (interpret-statement-list (get-function-body-from-class (operand1 statement) class this environment throw) (get-function-environment statement class this environment throw)
                                  class this return1 break continue throw))))))
 
 ;statement: (funcall (dot a/super/this/new f) 3 5) = a.f(3, 5)
 (define get-function-body-from-call
-  (lambda (statement class this environment)
+  (lambda (statement class this environment throw)
     (cond
       ((eq? 'this (cadr (cadr statement))) (raise "You called this on a function"))
       ((eq? 'super (cadr (cadr statement))) (raise "You called super on a function"))
-      ((list? (cadr (cadr statement))) (raise "You called new on a function"))
+      ((list? (cadr (cadr statement))) (eval-expression (cadadr statement) environment class this throw))
       (else (get-function-body-from-class (caddr (cadr statement)) class this environment)))))
 
 
