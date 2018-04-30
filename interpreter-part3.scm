@@ -56,12 +56,15 @@
 (define interpret-dot-variable
   (lambda (statement environment class this)
     (cond
-      ((eq? 'this (cadr statement)) (raise "You called this on a variable"))
+      ((eq? 'this (cadr statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
       ((eq? 'super (cadr statement)) (raise "You called super on a variable"))
       ((list? (cadr statement)) (raise "You called new on a variable"))
-      (else (unbox (retrieve-index (get-variable-index (operand2 statement) (get-class-from-instance (operand1 statement) environment) environment this)
-                                        (get-variable-values-from-closure (get-instance-closure (operand1 statement) environment))))))))
+      (else (get-variable-value-from-instance (operand1 statement) (operand2 statement) environment this)))))
 
+(define get-variable-value-from-instance
+  (lambda (instance variable environment this)
+    (unbox (retrieve-index (get-variable-index variable (get-class-from-instance instance environment) environment this)
+                           (get-variable-values-from-closure (get-instance-closure instance environment))))))
 
 (define retrieve-index
   (lambda (index lis)
@@ -215,7 +218,7 @@
   (lambda (statement environment class this return break continue throw)
     (interpret-statement-list (get-function-body-from-call statement class this environment)
                               (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
-                              class this return break continue throw)))
+                              class (cadr (cadr statement)) return break continue throw)))
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
@@ -302,10 +305,11 @@
 ; function a is 1 layer in
 ; function b is 2 layers in
 (define layers-in
-  (lambda (environment)
-    (if (null? environment)
-        0
-        (+ 1 (layers-in (pop-frame environment))))))
+  (lambda (environment statement)
+    (cond
+      ((eq? 'main (operand1 statement)) 1)
+      ((null? environment) 1)
+      (else (+ 1 (layers-in (pop-frame environment) statement))))))
 
 ; creates a closure for a function
 ; 1st element: formal parameters
@@ -313,7 +317,7 @@
 ; 3rd element: how many layers in the environment this function declaration is in (needed to find the function environment)
 (define create-function-closure
   (lambda (statement environment)
-    (cons (operand2 statement) (cons (operand3 statement) (cons (layers-in environment) '())))))
+    (cons (operand2 statement) (cons (operand3 statement) (cons (layers-in environment statement) '())))))
 
 ; creates the environment for a function by returning the specified number of layers
 ; ex: if the environment had 5 layers, it would be represented as ((FIFTH LAYER) (FOURTH) (THIRD) (SECOND) (FIRST))
