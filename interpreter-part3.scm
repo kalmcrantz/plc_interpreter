@@ -32,7 +32,6 @@
 (define interpret-statement
   (lambda (statement environment class this return break continue throw)
     (cond
-      ((eq? 'new (statement-type statement)) (interpret-instance-declaration statement environment class this))
       ((eq? 'function (statement-type statement)) (interpret-function-declaration statement environment class this))
       ((eq? 'static-function (statement-type statement)) (interpret-function-declaration statement environment class this))
       ((eq? 'class (statement-type statement)) (interpret-class-declaration statement environment class this))
@@ -60,8 +59,20 @@
     (cond
       ((eq? 'this (cadr statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
       ((eq? 'super (cadr statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
-      ((list? (cadr statement)) (raise "You called new on a variable"))
+      ((list? (cadr statement)) (get-variable-value-from-class (cadr (cadr statement)) (caddr statement) environment))
       (else (get-variable-value-from-instance (operand1 statement) (operand2 statement) environment this)))))
+
+(define get-variable-value-from-class
+  (lambda (class variable environment)
+    (find-value-from-variable variable (car (cadr (get-class-closure-from-class class environment))) (cadr (cadr (get-class-closure-from-class class environment))))))
+
+(define find-value-from-variable
+  (lambda (variable variables values)
+    (cond
+      ((null? variables) (myerror "error: variable does not exist:" variable))
+      ((eq? (car variables) variable) (car values))
+      (else (find-value-from-variable variable (cdr variables) (cdr values))))))
+    
 
 (define get-variable-value-from-instance
   (lambda (instance variable environment this)
@@ -163,8 +174,7 @@
 (define dotFunc
   (lambda (statement environment class this)
     (cond
-      ((eq? (operator (operand1 statement)) 'new) (lookup (operand2 statement) (car (caddr (lookup (cadadr statement) environment this)))
-                                                          (cadr interpret-instance-declaration (getInstance2 statement environment class this))))
+      ((eq? (operator (operand1 statement)) 'new) ((cadr interpret-instance-declaration (cadddr statement))))
       ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (car (caddr (lookup (car this) environment this))) (cadr this)))
       (else (lookup (operand2 statement) (car (caddr (lookup (car (lookup (operand1 statement) environment this)) environment this)))
                     (cadr (lookup (operand1 statement) environment this)))))))
@@ -220,7 +230,7 @@
 ;statement: (funcall (dot instance_name function_name) parameters)
 (define interpret-function-dot
   (lambda (statement environment class this return break continue throw)
-    (interpret-statement-list (get-function-body-from-call statement class this environment)
+    (interpret-statement-list (get-function-body-from-call statement class this environment throw)
                               (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
                               class (pick-instance-or-this (cadr statement) this) return break continue throw)))
 
@@ -242,11 +252,11 @@
 
 ;statement: (funcall (dot a/super/this/new f) 3 5) = a.f(3, 5)
 (define get-function-body-from-call
-  (lambda (statement class this environment)
+  (lambda (statement class this environment throw)
     (cond
       ((eq? 'this (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (get-class-from-instance this environment this) this environment))
       ((eq? 'super (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (get-class-from-instance this environment this) this environment))
-      ((list? (cadr (cadr statement))) (raise "You called new on a function"))
+      ((list? (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (cadr (cadr (cadr statement))) this environment))
       (else (get-function-body-from-class (caddr (cadr statement)) class this environment)))))
 
 
@@ -728,7 +738,7 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (cons (box val) (cdr vallist)))
+      ((eq? var (car varlist)) (begin (set-box! (car vallist) val) vallist))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
 ; Returns the list of variables from a frame

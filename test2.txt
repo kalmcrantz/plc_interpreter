@@ -1,6 +1,13 @@
-class B {
+class A {
+
+  var x = 100;
+  var y = 10;
+
+  function get(g) {
+    return g;
+  }
+
   static function main() {
-    var b = new B();
-    return b;
+    return new A().get(100);
   }
 }
