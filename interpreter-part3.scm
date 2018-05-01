@@ -26,7 +26,7 @@
   (lambda (statement-list environment class this return break continue throw)
     (if (null? statement-list)
         environment
-        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment class this return break continue throw) class this return break continue throw))))
+        (interpret-statement-list (rest-of statement-list) (interpret-statement (operator statement-list) environment class this return break continue throw) class this return break continue throw))))
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
@@ -52,26 +52,26 @@
   (lambda (instance environment this)
     (cond
       ((eq? 'this instance) (get-class-from-instance this environment this))
-      (else (car (lookup-variable instance environment))))))
+      (else (operator (lookup-variable instance environment))))))
 
 (define interpret-dot-variable
   (lambda (statement environment class this)
     (cond
-      ((eq? 'this (cadr statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
-      ((eq? 'super (cadr statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
-      ((list? (cadr statement)) (get-variable-value-from-class (cadr (cadr statement)) (caddr statement) environment))
+      ((eq? 'this (operand1 statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
+      ((eq? 'super (operand1 statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
+      ((list? (operand1 statement)) (get-variable-value-from-class (operand1 (operand1 statement)) (operand2 statement) environment))
       (else (get-variable-value-from-instance (operand1 statement) (operand2 statement) environment this)))))
 
 (define get-variable-value-from-class
   (lambda (class variable environment)
-    (find-value-from-variable variable (car (cadr (get-class-closure-from-class class environment))) (cadr (cadr (get-class-closure-from-class class environment))))))
+    (find-value-from-variable variable (operator (operand1 (get-class-closure-from-class class environment))) (operand1 (operand1 (get-class-closure-from-class class environment))))))
 
 (define find-value-from-variable
   (lambda (variable variables values)
     (cond
       ((null? variables) (myerror "error: variable does not exist:" variable))
-      ((eq? (car variables) variable) (car values))
-      (else (find-value-from-variable variable (cdr variables) (cdr values))))))
+      ((eq? (operator variables) variable) (operator values))
+      (else (find-value-from-variable variable (rest-of variables) (rest-of values))))))
     
 
 (define get-variable-value-from-instance
@@ -82,20 +82,20 @@
 (define retrieve-index
   (lambda (index lis)
     (cond
-      ((zero? index) (car lis))
+      ((zero? index) (operator lis))
       ((null? lis) (raise "Retrive index error"))
-      (else (retrieve-index (- index 1) (cdr lis))))))
+      (else (retrieve-index (- index 1) (rest-of lis))))))
 
 (define get-variable-index
   (lambda (variable class environment this)
-    (find-index-in-list variable (car (cadr (lookup class environment class this))))))
+    (find-index-in-list variable (operator (operand1 (lookup class environment class this))))))
 
 (define find-index-in-list
   (lambda (variable lis)
     (cond
       ((null? lis) (raise "Variable not in list"))
-      ((eq? (car lis) variable) 0)
-      (else (+ 1 (find-index-in-list variable (cdr lis)))))))
+      ((eq? (operator lis) variable) 0)
+      (else (+ 1 (find-index-in-list variable (rest-of lis)))))))
 
 (define get-instance-closure
   (lambda (instance environment this)
@@ -105,7 +105,7 @@
 
 (define get-variable-values-from-closure
   (lambda (closure)
-    (cadr closure)))
+    (operand1 closure)))
     
 ;creates a new instance of a class
 (define interpret-instance-declaration
@@ -115,7 +115,7 @@
 ;
 (define create-instance-closure
   (lambda (className environment class this)
-    (cons className (cdr (cadr (lookup className environment class this))))))
+    (cons className (rest-of (operand1 (lookup className environment class this))))))
 
 ;returns the state after a class is declared
 (define interpret-class-declaration
@@ -147,15 +147,15 @@
   (lambda (frame)
     (cond
       ((null? (store frame)) '())
-      ((list? (lookup-in-frame (car (variables frame)) frame)) (create-field-variables-from-frame (remove-top-binding frame)))
-      (else (cons (car (variables frame)) (create-field-variables-from-frame (remove-top-binding frame)))))))
+      ((list? (lookup-in-frame (operator (variables frame)) frame)) (create-field-variables-from-frame (remove-top-binding frame)))
+      (else (cons (operator (variables frame)) (create-field-variables-from-frame (remove-top-binding frame)))))))
 
 (define create-field-values-from-frame
   (lambda (frame)
     (cond
       ((null? (store frame)) '())
-      ((list? (lookup-in-frame (car (variables frame)) frame)) (create-field-values-from-frame (remove-top-binding frame)))
-      (else (cons (car (store frame)) (create-field-values-from-frame (remove-top-binding frame)))))))
+      ((list? (lookup-in-frame (operator (variables frame)) frame)) (create-field-values-from-frame (remove-top-binding frame)))
+      (else (cons (operator (store frame)) (create-field-values-from-frame (remove-top-binding frame)))))))
 
 ;gets the instance of the left hand side of a dot operator
 (define getInstance
@@ -174,10 +174,10 @@
 (define dotFunc
   (lambda (statement environment class this)
     (cond
-      ((eq? (operator (operand1 statement)) 'new) ((cadr interpret-instance-declaration (cadddr statement))))
-      ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (car (caddr (lookup (car this) environment this))) (cadr this)))
-      (else (lookup (operand2 statement) (car (caddr (lookup (car (lookup (operand1 statement) environment this)) environment this)))
-                    (cadr (lookup (operand1 statement) environment this)))))))
+      ((eq? (operator (operand1 statement)) 'new) ((operand1 interpret-instance-declaration (operand3 statement))))
+      ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (operator (operand2 (lookup (operator this) environment this))) (operand1 this)))
+      (else (lookup (operand2 statement) (operator (operand2 (lookup (operator (lookup (operand1 statement) environment this)) environment this)))
+                    (operand1 (lookup (operand1 statement) environment this)))))))
 
 ;removes the first binding in a frame
 ; Ex: ((a b) (1 2)) --> ((b) (2))
@@ -185,7 +185,7 @@
   (lambda (frame)
     (if (null? (variables frame))
         frame
-        (list (cdr (variables frame)) (cdr (store frame))))))
+        (list (rest-of (variables frame)) (rest-of (store frame))))))
 
 ;returns a list of functions and their closures in the form ((function names) (function closures) 
 (define create-function-list
@@ -198,8 +198,8 @@
   (lambda (frame return)
     (cond
       ((null? (store frame)) (return '() '()))
-      ((list? (lookup-in-frame (car (variables frame)) frame))
-       (create-functions-from-frame (remove-top-binding frame) (lambda (a b) (return (cons (car (variables frame)) a) (cons (car (store frame)) b)))))
+      ((list? (lookup-in-frame (operator (variables frame)) frame))
+       (create-functions-from-frame (remove-top-binding frame) (lambda (a b) (return (cons (operator (variables frame)) a) (cons (operator (store frame)) b)))))
       (else (create-functions-from-frame (remove-top-binding frame) return)))))
 
 ;returns the class body of a class declaration statement
@@ -219,11 +219,11 @@
 ; statement: (funcall function_name parameters)
 (define interpret-function
   (lambda (statement environment class this return break continue throw)
-    (car (call/cc
+    (operator (call/cc
      (lambda (return1)
        (if (list? (operand1 statement))
            (interpret-function-dot statement environment class this return1 break continue throw)
-           (interpret-statement-list (cadr (lookup-in-frame (operand1 statement) (caddr (lookup class environment class this))))
+           (interpret-statement-list (operand1 (lookup-in-frame (operand1 statement) (operand2 (lookup class environment class this))))
                                  (get-function-environment statement class this environment throw)
                                  class this return1 break continue throw)))))))
 
@@ -231,50 +231,50 @@
 (define interpret-function-dot
   (lambda (statement environment class this return break continue throw)
     (interpret-statement-list (get-function-body-from-call statement class this environment throw)
-                              (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
-                              class (pick-instance-or-this (cadr statement) this) return break continue throw)))
+                              (get-function-environment (cons (operator statement) (cons (operand2 (operand1 statement)) (get-rest-of-sublist statement))) class this environment throw)
+                              class (pick-instance-or-this (operand1 statement) this) return break continue throw)))
 
 (define pick-instance-or-this
   (lambda (statement this)
-    (if (or (eq? 'this (cadr statement)) (eq? 'super (cadr statement)))
+    (if (or (eq? 'this (operand1 statement)) (eq? 'super (operand1 statement)))
         this
-        (cadr statement))))
+        (operand1 statement))))
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
   (lambda (statement environment class this return break continue throw)
-    (cdr (call/cc
+    (rest-of (call/cc
      (lambda (return1)
        (if (list? (operand1 statement))
            (interpret-function-dot statement environment class this return1 break continue throw)
-           (interpret-statement-list (cadr (lookup (operand1 statement) environment)) (get-function-environment statement environment throw)
+           (interpret-statement-list (operand1 (lookup (operand1 statement) environment)) (get-function-environment statement environment throw)
                                  return1 break continue throw)))))))
 
 ;statement: (funcall (dot a/super/this/new f) 3 5) = a.f(3, 5)
 (define get-function-body-from-call
   (lambda (statement class this environment throw)
     (cond
-      ((eq? 'this (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (get-class-from-instance this environment this) this environment))
-      ((eq? 'super (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (get-class-from-instance this environment this) this environment))
-      ((list? (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (cadr (cadr (cadr statement))) this environment))
-      (else (get-function-body-from-class (caddr (cadr statement)) class this environment)))))
+      ((eq? 'this (operand1 (operand1 statement))) (get-function-body-from-class (operand2 (operand1 statement)) (get-class-from-instance this environment this) this environment))
+      ((eq? 'super (operand1 (operand1 statement))) (get-function-body-from-class (operand2 (operand1 statement)) (get-class-from-instance this environment this) this environment))
+      ((list? (operand1 (operand1 statement))) (get-function-body-from-class (operand2 (operand1 statement)) (operand1 (operand1 (operand1 statement))) this environment))
+      (else (get-function-body-from-class (operand2 (operand1 statement)) class this environment)))))
 
 
 (define get-function-body-from-class
   (lambda (function class this environment)
-    (cadr (lookup-in-frame function (get-function-list-from-class class this environment)))))
+    (operand1 (lookup-in-frame function (get-function-list-from-class class this environment)))))
 
 (define get-function-parameters-from-class-closure
   (lambda (statement class this environment)
-    (car (lookup-in-frame (operand1 statement) (get-function-list-from-class class this environment)))))
+    (operator (lookup-in-frame (operand1 statement) (get-function-list-from-class class this environment)))))
 
 (define get-function-list-from-class
   (lambda (class this environment)
-    (caddr (lookup class environment class this))))
+    (operand2 (lookup class environment class this))))
 
 (define get-function-names-from-class
   (lambda (class this environment)
-    (car (get-function-list-from-class class this environment))))
+    (operator (get-function-list-from-class class this environment))))
 
 (define get-class-closure-from-class
   (lambda (class environment)
@@ -282,17 +282,17 @@
 
 (define get-variables-in-class
   (lambda (class environment)
-    (car (cadr (get-class-closure-from-class class environment)))))
+    (operator (operand1 (get-class-closure-from-class class environment)))))
 
 ; get the formal parameters for a function
 (define get-formal-parameters
   (lambda (statement environment class this)
-    (car (lookup (operand1 statement) environment class this))))
+    (operator (lookup (operand1 statement) environment class this))))
 
 ; get the actual parameters from a function call
 (define get-actual-parameters
   (lambda (statement)
-    (cddr statement)))
+    (get-rest-of-sublist statement)))
 
 ; returns the environment for a function by doing the following in order:
 ; 1. finds what's in scope by determining how many layers deep the scope is
@@ -310,7 +310,7 @@
   
 (define get-function-layer-num-from-class-closure
   (lambda (statement class this environment)
-    (caddr (lookup-in-frame (operand1 statement) (get-function-list-from-class class this environment)))))
+    (operand2 (lookup-in-frame (operand1 statement) (get-function-list-from-class class this environment)))))
 
 ; adds the bindings of the formal parameters to the actual parameters and adds them to the new environment
 ; oldenvironment is used to evaluate expressions in the actual parameters
@@ -319,7 +319,7 @@
     (cond
       ((and (null? formal) (null? actual)) newenvironment)
       ((or (null? formal) (null? actual)) (myerror "Invalid function call"))
-      (else (add-bindings (cdr formal) (cdr actual) (insert (car formal) (eval-expression (car actual) oldenvironment class this throw) newenvironment) oldenvironment class this throw)))))
+      (else (add-bindings (rest-of formal) (rest-of actual) (insert (operator formal) (eval-expression (operator actual) oldenvironment class this throw) newenvironment) oldenvironment class this throw)))))
 
 ; adds the function definition to the environment
 ; TODO: This will need to be changed so that its inserted in the class and not the base layer
@@ -362,13 +362,13 @@
   (lambda (l1 l2)
     (if (null? l1)
         l2
-        (cons (car l1) (myappend (cdr l1) l2)))))
+        (cons (operator l1) (myappend (rest-of l1) l2)))))
 
 (define myreverse
   (lambda (lis)
     (if (null? lis)
         lis
-        (myappend (myreverse (cdr lis)) (cons (car lis) '())))))
+        (myappend (myreverse (rest-of lis)) (cons (operator lis) '())))))
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
@@ -409,7 +409,7 @@
 ; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
 (define interpret-block
   (lambda (statement environment class this return break continue throw)
-    (pop-frame (interpret-statement-list (cdr statement)
+    (pop-frame (interpret-statement-list (rest-of statement)
                                          (push-frame environment)
                                          class
                                          this
@@ -471,7 +471,7 @@
     (cond
       ((null? finally-statement) '(begin))
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
-      (else (cons 'begin (cadr finally-statement))))))
+      (else (cons 'begin (operand1 finally-statement))))))
 
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
 (define eval-expression
@@ -489,7 +489,7 @@
 (define eval-operator
   (lambda (expr environment class this throw)
     (cond
-      ((eq? 'new (statement-type expr)) (interpret-instance-declaration (cadr expr) environment class this))
+      ((eq? 'new (statement-type expr)) (interpret-instance-declaration (operand1 expr) environment class this))
       ((eq? 'dot (statement-type expr)) (interpret-dot-variable expr environment class this))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment class this throw)))
       ((eq? 'funcall (operator expr)) (call/cc
@@ -532,6 +532,9 @@
 ;-----------------
 
 ; These helper functions define the operator and operands of a value expression
+(define get-rest-of-sublist cddr)
+(define get-sublist-sublist cdddr)
+(define rest-of cdr)
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
@@ -539,11 +542,11 @@
 
 (define exists-operand2?
   (lambda (statement)
-    (not (null? (cddr statement)))))
+    (not (null? (get-rest-of-sublist statement)))))
 
 (define exists-operand3?
   (lambda (statement)
-    (not (null? (cdddr statement)))))
+    (not (null? (get-sublist-sublist statement)))))
 
 ; these helper functions define the parts of the various statement types
 (define statement-type operator)
@@ -564,7 +567,7 @@
 
 (define catch-var
   (lambda (catch-statement)
-    (car (operand1 catch-statement))))
+    (operator (operand1 catch-statement))))
 
 
 ;------------------------
@@ -589,11 +592,11 @@
 ; remove a frame from the environment
 (define pop-frame
   (lambda (environment)
-    (cdr environment)))
+    (rest-of environment)))
 
 ; some abstractions
-(define topframe car)
-(define remainingframes cdr)
+(define topframe operator)
+(define remainingframes rest-of)
 
 ; does a variable exist in the environment?
 (define exists?
@@ -608,8 +611,8 @@
   (lambda (var l)
     (cond
       ((null? l) #f)
-      ((eq? var (car l)) #t)
-      (else (exists-in-list? var (cdr l))))))
+      ((eq? var (operator l)) #t)
+      (else (exists-in-list? var (rest-of l))))))
 
 ; Looks up a value in the environment.  If the value is a boolean, it converts our languages boolean type to a Scheme boolean type
 (define lookup
@@ -630,7 +633,7 @@
     (cond
       ((null? environment) (myerror "error: undefined variable" var))
       ((exists-in-list? var (variables (topframe environment))) (lookup-in-frame var (topframe environment)))
-      (else (lookup-in-env var (cdr environment))))))
+      (else (lookup-in-env var (rest-of environment))))))
 
 ; Return the value bound to a variable in the frame
 (define lookup-in-frame
@@ -644,29 +647,29 @@
   (lambda (var l)
     (cond
       ((null? l) 0)  ; should not happen
-      ((eq? var (car l)) 0)
-      (else (+ 1 (indexof var (cdr l)))))))
+      ((eq? var (operator l)) 0)
+      (else (+ 1 (indexof var (rest-of l)))))))
 
 ; Get the value stored at a given index in the list
 (define get-value
   (lambda (n l)
     (cond
-      ((and (zero? n) (box? (car l))) (unbox (car l)))
-      ((zero? n) (car l))
-      (else (get-value (- n 1) (cdr l))))))
+      ((and (zero? n) (box? (operator l))) (unbox (operator l)))
+      ((zero? n) (operator l))
+      (else (get-value (- n 1) (rest-of l))))))
 
 ; Adds a new variable/value binding pair into the environment.  Gives an error if the variable already exists in this frame.
 (define insert
   (lambda (var val environment)
-    (if (exists-in-list? var (variables (car environment)))
+    (if (exists-in-list? var (variables (operator environment)))
         (myerror "error: variable is being re-declared:" var)
-        (cons (add-to-frame var val (car environment)) (cdr environment)))))
+        (cons (add-to-frame var val (operator environment)) (rest-of environment)))))
 
 (define insert-in-base-layer
   (lambda (var val environment)
     (cond
-      ((and (null? (remainingframes environment)) (exists-in-list? var (variables (car environment)))) (myerror "error: variable is being re-declared:" var))
-      ((null? (remainingframes environment)) (cons (add-to-frame var val (car environment)) (cdr environment)))
+      ((and (null? (remainingframes environment)) (exists-in-list? var (variables (operator environment)))) (myerror "error: variable is being re-declared:" var))
+      ((null? (remainingframes environment)) (cons (add-to-frame var val (operator environment)) (rest-of environment)))
       (else (cons (topframe environment) (insert-in-base-layer var val (remainingframes environment)))))))
 
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
@@ -680,8 +683,8 @@
 ;var: (dot instance variable)
 (define update-instance-field
   (lambda (var val environment this)
-    (if (exists-in-list? (caddr var) (get-variables-in-class (get-class-from-instance (cadr var) environment this) environment))
-        (update-instance-field-for-real (cadr var) (caddr var) val environment this)
+    (if (exists-in-list? (operand2 var) (get-variables-in-class (get-class-from-instance (operand1 var) environment this) environment))
+        (update-instance-field-for-real (operand1 var) (operand2 var) val environment this)
         (myerror "error: variable not defined: " var))))
 
 (define update-instance-field-for-real
@@ -689,7 +692,7 @@
     (cond
       ((null? environment) (myerror "instance does not exist: " instance))
       ((eq? 'this instance) (update-instance-field-for-real this variable value environment this))
-      ((exists-in-list? instance (variables (car environment))) (cons (update-instance-field-in-frame instance value (topframe environment)
+      ((exists-in-list? instance (variables (operator environment))) (cons (update-instance-field-in-frame instance value (topframe environment)
                                               (get-variable-index variable (get-class-from-instance instance environment this) environment instance)) (remainingframes environment)))
       (else (cons (topframe environment) (update-instance-field-for-real instance variable value (remainingframes environment) this))))))
 
@@ -702,22 +705,22 @@
 (define update-instance-field-in-frame-store
   (lambda (instance value varlist vallist index)
     (cond
-      ((eq? instance (car varlist)) (cons (update-field-in-closure instance value (unbox (car vallist)) index) (cdr vallist)))
+      ((eq? instance (operator varlist)) (cons (update-field-in-closure instance value (unbox (operator vallist)) index) (rest-of vallist)))
       ((null? varlist) (myerror "variable not declared:" instance))
-      (else (cons (car vallist) (update-instance-field-in-frame-store instance value (cdr varlist) (cdr vallist) index))))))
+      (else (cons (operator vallist) (update-instance-field-in-frame-store instance value (rest-of varlist) (rest-of vallist) index))))))
 
 ; needs to return the instance closure with the updated field
 ; looks like: (A (1 2))
 (define update-field-in-closure
   (lambda (instance value closure index)
-    (box (list (car closure) (update-field-in-value-list instance value (cadr closure) index)))))
+    (box (list (operator closure) (update-field-in-value-list instance value (operand1 closure) index)))))
 
 ; needs to return the value-list updated
 (define update-field-in-value-list
   (lambda (instance value value-list index)
     (cond
-      ((zero? index) (begin (set-box! (car value-list) value) value-list))
-      (else (cons (car value-list) (update-field-in-value-list instance value (cdr value-list) (- 1 index)))))))
+      ((zero? index) (begin (set-box! (operator value-list) value) value-list))
+      (else (cons (operator value-list) (update-field-in-value-list instance value (rest-of value-list) (- 1 index)))))))
 ; Add a new variable/value pair to the frame.
 (define add-to-frame
   (lambda (var val frame)
@@ -726,7 +729,7 @@
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
   (lambda (var val environment)
-    (if (exists-in-list? var (variables (car environment)))
+    (if (exists-in-list? var (variables (operator environment)))
         (cons (update-in-frame var val (topframe environment)) (remainingframes environment))
         (cons (topframe environment) (update-existing var val (remainingframes environment))))))
 ; Changes the binding of a variable in the frame to a new value.
@@ -738,18 +741,18 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (begin (set-box! (car vallist) val) vallist))
-      (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
+      ((eq? var (operator varlist)) (begin (set-box! (operator vallist) val) vallist))
+      (else (cons (operator vallist) (update-in-frame-store var val (rest-of varlist) (rest-of vallist)))))))
 
 ; Returns the list of variables from a frame
 (define variables
   (lambda (frame)
-    (car frame)))
+    (operator frame)))
 
 ; Returns the store from a frame
 (define store
   (lambda (frame)
-    (cadr frame)))
+    (operand1 frame)))
 
 ; Functions to convert the Scheme #t and #f to our languages true and false, and back.
 
@@ -778,5 +781,5 @@
     (letrec ((makestr (lambda (str vals)
                         (if (null? vals)
                             str
-                            (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
+                            (makestr (string-append str (string-append " " (symbol->string (operator vals)))) (rest-of vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
