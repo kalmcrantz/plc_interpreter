@@ -59,7 +59,7 @@
   (lambda (statement environment class this)
     (cond
       ((eq? 'this (cadr statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
-      ((eq? 'super (cadr statement)) (raise "You called super on a variable"))
+      ((eq? 'super (cadr statement)) (get-variable-value-from-instance this (operand2 statement) environment this))
       ((list? (cadr statement)) (raise "You called new on a variable"))
       (else (get-variable-value-from-instance (operand1 statement) (operand2 statement) environment this)))))
 
@@ -222,7 +222,13 @@
   (lambda (statement environment class this return break continue throw)
     (interpret-statement-list (get-function-body-from-call statement class this environment)
                               (get-function-environment (cons (car statement) (cons (caddr (cadr statement)) (cddr statement))) class this environment throw)
-                              class (cadr (cadr statement)) return break continue throw)))
+                              class (pick-instance-or-this (cadr statement) this) return break continue throw)))
+
+(define pick-instance-or-this
+  (lambda (statement this)
+    (if (or (eq? 'this (cadr statement)) (eq? 'super (cadr statement)))
+        this
+        (cadr statement))))
 
 ; returns the state of a function (needed if the function is called but want to ignore return)
 (define interpret-function-no-return
@@ -238,8 +244,8 @@
 (define get-function-body-from-call
   (lambda (statement class this environment)
     (cond
-      ((eq? 'this (cadr (cadr statement))) (raise "You called this on a function"))
-      ((eq? 'super (cadr (cadr statement))) (raise "You called super on a function"))
+      ((eq? 'this (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (get-class-from-instance this environment this) this environment))
+      ((eq? 'super (cadr (cadr statement))) (get-function-body-from-class (caddr (cadr statement)) (get-class-from-instance this environment this) this environment))
       ((list? (cadr (cadr statement))) (raise "You called new on a function"))
       (else (get-function-body-from-class (caddr (cadr statement)) class this environment)))))
 
