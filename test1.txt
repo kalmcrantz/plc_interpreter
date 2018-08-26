@@ -1,27 +1,13 @@
-function collatz(n) {
-  var counteven = 0;
-  var countodd = 0;
+class A {
 
-  function evenstep(n) {
-    counteven = counteven + 1;
-    return n / 2;
+  var x = 100;
+
+  function add(x) {
+    return this.x + x;
   }
 
-  function oddstep(n) {
-    countodd = countodd + 1;
-    return 3 * n + 1;
+  static function main() {
+    var a = new A();
+    return a.add(25);
   }
-
-  while (n != 1) {
-    if (n % 2 == 0)
-      n = evenstep(n);
-    else
-      n = oddstep(n);
-  }
-  return counteven + countodd;
-}
-
-
-function main() {
-  return collatz(111);
 }
